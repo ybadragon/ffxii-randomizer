@@ -10,12 +10,14 @@ public enum RunStep { CheckingGame, ReadingGameData, Randomizing, WritingAndChec
 public sealed record RunOutcome(HistoryEntry Entry, RunResult Result);
 
 /// <summary>One full run: randomize from the original data, install it into the game, then record it in history.</summary>
-public sealed class RandomizerService(GameInstall game, AppPaths paths)
+/// <remarks>The app passes its own stores so a run appears in its History and preset lists straight away. Each store
+/// caches what it loaded, so separate instances would not see each other's changes until a restart.</remarks>
+public sealed class RandomizerService(GameInstall game, AppPaths paths, PresetStore? presets = null, HistoryStore? history = null)
 {
     public GameInstall Game { get; } = game;
     public PatchManager Patcher { get; } = new(game);
-    public PresetStore Presets { get; } = new(paths);
-    public HistoryStore History { get; } = new(paths);
+    public PresetStore Presets { get; } = presets ?? new(paths);
+    public HistoryStore History { get; } = history ?? new(paths);
 
     public RunOutcome Run(RandomizerSettings settings, Seed seed, Preset? preset, IProgress<RunStep>? progress = null)
     {

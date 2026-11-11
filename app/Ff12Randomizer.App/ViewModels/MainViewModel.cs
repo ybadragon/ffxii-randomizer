@@ -271,7 +271,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void ConnectGame(GameInstall? game)
     {
-        _service = game is null ? null : new RandomizerService(game, _paths);
+        _service = game is null ? null : new RandomizerService(game, _paths, _presets, _history);
         GameFound = game is not null;
         RefreshStatus();
         if (game is null) ShowGameNotFound();

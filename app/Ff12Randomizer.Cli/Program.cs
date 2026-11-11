@@ -20,7 +20,10 @@ if (args[0] is "randomize" or "restore")
         return 0;
     }
     var settings = Ff12Randomizer.Core.Randomization.RandomizerSettings.Defaults();
-    foreach (string id in args.Skip(2)) settings.Toggles[id] = true;
+    foreach (string id in args.Skip(2))
+    {
+        if (id.Split('=') is [var key, var value]) settings.Choices[key] = value; else settings.Toggles[id] = true;
+    }
     var outcome = service.Run(settings, new Ff12Randomizer.Core.Randomization.Seed(args[1]), null,
         new Progress<Ff12Randomizer.Core.RunStep>(s => Console.WriteLine($"  {s}")));
     Console.WriteLine($"seed {outcome.Entry.Seed}: {outcome.Entry.FileCount} file(s), fingerprint {outcome.Entry.PatchedFingerprint}");
@@ -206,6 +209,80 @@ switch (args[0])
                     var e = vbf.Find(name);
                     Console.WriteLine($"{seen.Count,4} {e?.Size,10} {name}");
                 }
+            }
+            break;
+        }
+
+    case "treasures":
+        {
+            var items = Ff12Randomizer.Core.GameData.ItemCatalog.Instance;
+            int maps = 0, chests = 0, unknown = 0, failed = 0;
+            foreach (var map in Ff12Randomizer.Core.GameData.TreasureData.Maps)
+            {
+                var mapEntry = vbf.Find(map.ArchivePath);
+                if (mapEntry is null) { Console.WriteLine($"MISSING {map.ArchivePath}"); failed++; continue; }
+                Ff12Randomizer.Core.GameData.EbpTreasureTable table;
+                try { table = new(vbf.Extract(mapEntry), map); }
+                catch (InvalidDataException e) { Console.WriteLine(e.Message); failed++; continue; }
+                maps++;
+                for (int i = 0; i < table.Count; i++)
+                {
+                    var t = table[i];
+                    chests++;
+                    for (int s = 0; s < 4; s++) if (items.Find(t.GetItem(s)) is null) unknown++;
+                    if (args.Length > 1 && map.MapId.StartsWith(args[1]))
+                        Console.WriteLine($"{map.MapId}#{i,-2} gil {t.GilChance,3}% ({t.GilCommon}/{t.GilRare}) spawn {t.SpawnChance,3}% respawn {t.Respawn,3} | " +
+                            $"{items.NameOf(t.Common1)}, {items.NameOf(t.Common2)} | rare {items.NameOf(t.Rare1)}, {items.NameOf(t.Rare2)}");
+                }
+            }
+            Console.WriteLine($"{maps} maps, {chests} chests, {unknown} item slots not in the catalog, {failed} maps failed");
+            var byCategory = Ff12Randomizer.Core.GameData.TreasureData.Maps
+                .Where(m => vbf.Find(m.ArchivePath) is not null)
+                .SelectMany(m => { var t = new Ff12Randomizer.Core.GameData.EbpTreasureTable(vbf.Extract(vbf.Find(m.ArchivePath)!), m); return Enumerable.Range(0, t.Count).Select(i => t[i]); })
+                .Where(t => t.GilChance < 100)
+                .SelectMany(t => Enumerable.Range(0, 4).Select(t.GetItem))
+                .GroupBy(id => items.Find(id)?.Category.ToString() ?? "?");
+            foreach (var g in byCategory) Console.WriteLine($"  {g.Key}: {g.Count()} slots, e.g. {string.Join(", ", g.Distinct().Take(4).Select(items.NameOf))}");
+            break;
+        }
+
+    case "shops":
+        {
+            var items = Ff12Randomizer.Core.GameData.ItemCatalog.Instance;
+            var pack = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
+            var table = new Ff12Randomizer.Core.GameData.ShopTable(pack);
+            int unknown = 0;
+            foreach (var shop in table.Shops)
+            {
+                Console.WriteLine($"[{shop.Index}] {shop.Name} ({shop.Info?.Location}) {shop.Lists.Count} stages");
+                foreach (var (list, n) in shop.Lists.Select((l, n) => (l, n)))
+                {
+                    unknown += list.Items.Count(i => i != 0xFFFF && items.Find(i) is null);
+                    if (args.Length > 1 && shop.Name.Contains(args[1], StringComparison.OrdinalIgnoreCase))
+                        Console.WriteLine($"   stage {n}: {string.Join(", ", list.Items.Select(items.NameOf))}");
+                }
+            }
+            Console.WriteLine($"{table.Shops.Count} shops, {unknown} unknown item ids");
+            break;
+        }
+
+    case "dryrun":
+        {
+            // Runs the features without installing anything: dryrun <seed> <toggle or id=choice...>
+            var settings = Ff12Randomizer.Core.Randomization.RandomizerSettings.Defaults();
+            foreach (string id in args.Skip(2))
+            {
+                if (id.Split('=') is [var key, var value]) settings.Choices[key] = value; else settings.Toggles[id] = true;
+            }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var run = Ff12Randomizer.Core.Randomization.RandomizerEngine.Run(vbf, settings, new Ff12Randomizer.Core.Randomization.Seed(args[1]));
+            Console.WriteLine($"{sw.ElapsedMilliseconds} ms, {run.Files.Count} files changed, {run.Problems.Count} problems");
+            foreach (var p in run.Problems.Take(10)) Console.WriteLine($"  PROBLEM {p}");
+            foreach (var (section, node) in run.Spoiler)
+            {
+                var list = node!.AsArray();
+                Console.WriteLine($"[{section}] {list.Count} entries");
+                foreach (var item in list.Take(args.Contains("-v") ? 1000 : 3)) Console.WriteLine($"  {item!.ToJsonString()}");
             }
             break;
         }

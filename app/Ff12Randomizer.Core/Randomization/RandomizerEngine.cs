@@ -23,6 +23,8 @@ public static class RandomizerEngine
     public static IReadOnlyList<IRandomizerFeature> Features { get; } =
     [
         new StartingPotionsFeature(),
+        new TreasureFeature(),
+        new ShopsFeature(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

@@ -76,15 +76,14 @@ public static class OptionCatalog
         ]),
         new("items", "Treasure & Shops", "Treasure chests, shop stock and the bazaar.",
         [
-            Toggle("treasure", "Treasure chests",
-                "What each chest holds, including gil amounts and the separate Diamond Armlet tables.", subOptions:
-            [
-                new("treasurerare", "Include rare treasure", "Chests that normally hold one-of-a-kind items"),
-            ]),
-            Toggle("shops", "Shops", "Each shop stocks a random selection of items and gear.", subOptions:
-            [
-                new("shopprices", "Random prices", "Prices change too"),
-            ]),
+            new("treasure", "Treasure chests",
+                "What each chest holds, including the rare finds you get with the Diamond Armlet. Shuffle moves the game's own chest contents between chests; Randomize rolls new items. With Keep things sane, items stay close to the area's place in the story. Key items and gil-only chests never change.",
+                false, OrigShuffleRandom, [new("treasuregil", "Random gil amounts", "Chests that give gil give a different amount")],
+                Implemented: true),
+            new("shops", "Shops",
+                "What each shop sells. Weapons stay weapons, magicks stay magicks and so on, and each shop keeps how many items it sells at each point in the story. Shuffle moves the game's own stock between shops; Randomize picks new items. With Keep things sane, every magick and technick stays on sale somewhere. Gambits don't change.",
+                false, OrigShuffleRandom, [new("shopprices", "Random prices", "Prices change too", Implemented: false)],
+                Implemented: true),
             Toggle("bazaar", "Bazaar", "What the bazaar offers for your loot."),
         ]),
         new("enemies", "Enemies", "Rewards, stats and weaknesses of the enemies you fight.",

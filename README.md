@@ -60,5 +60,5 @@ Creating `ff12rando\verbose.txt` in the game folder makes the loader log every a
 
 ## Credits
 
-Data-table layouts will lean on [Bartz24/FFModdingWPF](https://github.com/Bartz24/FFModdingWPF)
-(MIT) as a reference.
+Data-table layouts and the item, shop and treasure tables in `app/Ff12Randomizer.Core/Data` come from [Bartz24/FFModdingWPF](https://github.com/Bartz24/FFModdingWPF)
+(MIT, license in `third_party/FFModdingWPF`).

@@ -23,12 +23,13 @@ public sealed class PresetStore(AppPaths paths)
     public static IReadOnlyList<Preset> BuiltIns { get; } =
     [
         // Options that aren't implemented yet are ignored by the engine, so these presets grow as features land.
-        BuiltIn("Light shuffle", ["sane", "spoiler", "treasure", "shops", "rewards", "drops", "steals"]),
-        BuiltIn("Classic randomizer", ["sane", "spoiler", "treasure", "shops", "bazaar", "rewards", "drops", "steals", "poaches", "espers", "quickenings"],
-            ("boards", "shuffle")),
-        BuiltIn("Chaos", ["sane", "spoiler", "treasure", "treasurerare", "shops", "shopprices", "bazaar", "rewards", "drops", "steals", "poaches",
+        BuiltIn("Light shuffle", ["sane", "spoiler", "rewards", "drops", "steals"],
+            ("treasure", "shuffle"), ("shops", "shuffle")),
+        BuiltIn("Classic randomizer", ["sane", "spoiler", "treasuregil", "bazaar", "rewards", "drops", "steals", "poaches", "espers", "quickenings"],
+            ("treasure", "random"), ("shops", "shuffle"), ("boards", "shuffle")),
+        BuiltIn("Chaos", ["sane", "spoiler", "treasuregil", "shopprices", "bazaar", "rewards", "drops", "steals", "poaches",
                 "espers", "quickenings", "startinv", "elements", "wstats", "astats"],
-            ("pstats", "random"), ("boards", "random"), ("estats", "random")),
+            ("treasure", "random"), ("shops", "random"), ("pstats", "random"), ("boards", "random"), ("estats", "random")),
     ];
 
     public IReadOnlyList<Preset> Mine => _mine ??= JsonFile.Load(paths.PresetsPath, () => new List<Preset>());

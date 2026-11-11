@@ -65,6 +65,9 @@ public sealed partial class SpoilerViewModel : ObservableObject
         _returnTo = returnTo;
         var doc = SpoilerDocument.Load(path);
         Sections = new(doc.Tables.Select(t => new SpoilerSectionViewModel(t)));
+        // Checking a section any way (click, keyboard, accessibility tools) selects it.
+        foreach (var section in Sections)
+            section.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(SpoilerSectionViewModel.IsSelected) && section.IsSelected) Selected = section; };
         Summary = doc.Summary.Count == 0 ? "" : string.Join(" · ", doc.Summary);
         Subtitle = $"Seed {doc.Seed}" + (doc.CreatedAt is { } when ? $" · {Format.When(when)}" : "");
         Selected = Sections.FirstOrDefault();

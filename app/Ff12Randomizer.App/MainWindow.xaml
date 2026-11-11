@@ -397,7 +397,7 @@
                             <ItemsControl ItemsSource="{Binding Sections}" AutomationProperties.Name="Spoiler sections">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:SpoilerSectionViewModel}">
-                                        <RadioButton x:Name="Tab" Style="{StaticResource RailTab}" GroupName="SpoilerSections" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                        <RadioButton x:Name="Tab" Style="{StaticResource RailTab}" GroupName="SpoilerSections" IsChecked="{Binding IsSelected}"
                                                      Command="{Binding DataContext.SelectCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                      CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title}">
                                             <DockPanel>

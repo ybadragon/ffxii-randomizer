@@ -30,6 +30,7 @@ public static class RandomizerEngine
         new GearStatsFeature(),
         new EnemyStatsFeature(),
         new ElementsFeature(),
+        new ShopPricesFeature(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

@@ -82,7 +82,7 @@ public static class OptionCatalog
                 Implemented: true),
             new("shops", "Shops",
                 "What each shop sells. Weapons stay weapons, magicks stay magicks and so on, and each shop keeps how many items it sells at each point in the story. Shuffle moves the game's own stock between shops; Randomize picks new items. With Keep things sane, every magick and technick stays on sale somewhere. Gambits don't change.",
-                false, OrigShuffleRandom, [new("shopprices", "Random prices", "Prices change too", Implemented: false)],
+                false, OrigShuffleRandom, [new("shopprices", "Random prices", "Consumables and equipment cost a different amount (magicks and technicks keep their prices)")],
                 Implemented: true),
             new("bazaar", "Bazaar",
                 "What each bazaar package gives you. The loot that unlocks a package and its price stay the same; only the items you get change. Shuffle moves the game's own package contents around; Randomize picks new items. Key items like the Monographs and Canopic Jar never move.",

@@ -45,6 +45,8 @@ public sealed class St2eText
     }
 
     public string? this[uint id] => _byId.TryGetValue(id, out string? text) && text.Length > 0 ? text : null;
+
+    public IEnumerable<(uint Id, string Text)> All => _byId.Select(kv => (kv.Key, kv.Value));
 }
 
 /// <summary>

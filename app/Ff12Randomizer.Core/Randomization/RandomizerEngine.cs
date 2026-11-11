@@ -32,6 +32,8 @@ public static class RandomizerEngine
         new ElementsFeature(),
         new ShopPricesFeature(),
         new LicenseBoardsFeature(),
+        new StartingInventoryFeature(),
+        new PartyStatsFeature(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

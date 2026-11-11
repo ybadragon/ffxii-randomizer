@@ -63,8 +63,8 @@ public static class OptionCatalog
             Toggle("potions", "Vaan starts with 99 Potions",
                 "A quick way to check the randomizer is working: start a new game and Vaan's Potions stack is 99 instead of 5.",
                 badge: "Test mod", implemented: true),
-            Pick("pstats", "Party stats", "Starting stats for every party member.", null, OrigShuffleRandom),
-            Toggle("startinv", "Starting equipment and items", "Each character joins with random gear and items."),
+            new("pstats", "Party stats", "The six main characters trade starting stats and stat growth: each takes another one's whole set, so Penelo might grow like Basch. Every value is one the game already uses.", false, [new("orig", "Original"), new("shuffle", "Shuffle between characters")], [], Badge: "Untested", Implemented: true),
+            Toggle("startinv", "Starting equipment and items", "What each party member and guest brings when they join. Gear is swapped for gear of the same kind (a bow user still gets a bow and arrows) and consumables for other consumables; magicks, technicks, gambits and key items stay. With Keep things sane, replacements stay close in strength.", badge: "Untested", implemented: true),
         ]),
         new("licenses", "License Board", "The Zodiac job boards, Espers and Quickenings.",
         [

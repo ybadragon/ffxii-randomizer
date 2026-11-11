@@ -455,6 +455,62 @@ switch (args[0])
             break;
         }
 
+    case "extcalls":
+        {
+            // extcalls <dir>: for each edited script (file name = archive path with '/' -> '_'), count CALL-family
+            // instructions targeting 0x1100-0x11FF (the Manifesto's VM extension) and other call ids, vs the vanilla file.
+            static Dictionary<ushort, int> Calls(byte[] b)
+            {
+                var d = new Dictionary<ushort, int>();
+                for (int p = 0; p + 3 <= b.Length; p++)
+                {
+                    if (b[p] is 0x58 or 0x59 or 0x5D or 0x5E)
+                    {
+                        ushort id = (ushort)(b[p + 1] | b[p + 2] << 8);
+                        d[id] = d.GetValueOrDefault(id) + 1;
+                    }
+                }
+                return d;
+            }
+            int withExt = 0, files = 0;
+            var newIds = new Dictionary<ushort, int>();
+            foreach (var path in Directory.GetFiles(args[1], "*.ebp"))
+            {
+                var vanillaEntry = vbf.Entries.FirstOrDefault(e => e.Name.Replace('/', '_') == Path.GetFileName(path));
+                if (vanillaEntry is null) continue;
+                files++;
+                var edited = Calls(File.ReadAllBytes(path));
+                var vanilla = Calls(vbf.Extract(vanillaEntry));
+                int ext = edited.Where(kv => kv.Key is >= 0x1100 and <= 0x11FF).Sum(kv => kv.Value)
+                        - vanilla.Where(kv => kv.Key is >= 0x1100 and <= 0x11FF).Sum(kv => kv.Value);
+                if (ext > 0) withExt++;
+                foreach (var (id, n) in edited) if (n > vanilla.GetValueOrDefault(id) + 2 && id is >= 0x1100 and <= 0x11FF) newIds[id] = newIds.GetValueOrDefault(id) + 1;
+            }
+            Console.WriteLine($"{files} edited scripts compared; {withExt} have more 0x11xx calls than vanilla");
+            var added = new Dictionary<ushort, int>();
+            foreach (var path in Directory.GetFiles(args[1], "*.ebp"))
+            {
+                var ve = vbf.Entries.FirstOrDefault(e => e.Name.Replace('/', '_') == Path.GetFileName(path));
+                if (ve is null) continue;
+                var ed = Calls(File.ReadAllBytes(path)); var va = Calls(vbf.Extract(ve));
+                foreach (var (id, c) in ed) { int extra = c - va.GetValueOrDefault(id); if (extra > 0) added[id] = added.GetValueOrDefault(id) + extra; }
+            }
+            foreach (var (id, c) in added.OrderByDescending(kv => kv.Value).Take(25)) Console.WriteLine($"  +{c,5} call 0x{id:X4}");
+            foreach (var (id, n) in newIds.OrderByDescending(kv => kv.Value).Take(10)) Console.WriteLine($"  call 0x{id:X4}: more often in {n} files");
+            break;
+        }
+
+    case "st2e":
+        {
+            // st2e <archive path> [filter]: every entry's id and text
+            var text = new Ff12Randomizer.Core.GameData.St2eText(vbf.Extract(vbf.Find(args[1])!));
+            foreach (var (id, s) in text.All)
+            {
+                if (args.Length < 3 || s.Contains(args[2], StringComparison.OrdinalIgnoreCase)) Console.WriteLine($"{id,6} {s.ReplaceLineEndings(" ")}");
+            }
+            break;
+        }
+
     case "callscan":
         {
             // callscan <hexCallId>...: every "PUSHII n; CALL/CALLPOPA id" in the US map scripts, i.e. bytes

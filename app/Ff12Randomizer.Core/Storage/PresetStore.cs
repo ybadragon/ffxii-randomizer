@@ -29,7 +29,7 @@ public sealed class PresetStore(AppPaths paths)
             ("treasure", "random"), ("shops", "shuffle"), ("rewards", "shuffle"), ("bazaar", "shuffle"), ("boards", "shuffle")),
         BuiltIn("Chaos", ["sane", "spoiler", "treasuregil", "shopprices", "drops", "steals", "poaches",
                 "espers", "quickenings", "startinv", "elements", "wstats", "astats"],
-            ("treasure", "random"), ("shops", "random"), ("rewards", "random"), ("bazaar", "random"), ("pstats", "random"),
+            ("treasure", "random"), ("shops", "random"), ("rewards", "random"), ("bazaar", "random"), ("pstats", "shuffle"),
             ("boards", "random"), ("estats", "random")),
     ];
 

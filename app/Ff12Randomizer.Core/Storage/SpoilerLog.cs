@@ -36,7 +36,13 @@ public static class SpoilerLog
         Directory.CreateDirectory(paths.SpoilerDirectory);
         string safeSeed = string.Concat(run.Seed.Text.Select(c => char.IsLetterOrDigit(c) || c == '-' ? c : '_'));
         string path = Path.Combine(paths.SpoilerDirectory, $"{entry.CreatedAt:yyyyMMdd-HHmmss}-seed-{safeSeed}.json");
-        File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        // Relaxed escaping writes apostrophes and accented letters as themselves ("Migelo's Sundries", not
+        // "Migelo's Sundries"), so searching the file for a name works. The file is only read as text, never as HTML.
+        File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        }));
         return path;
     }
 

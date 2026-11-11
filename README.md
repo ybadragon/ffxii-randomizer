@@ -4,7 +4,41 @@ Randomizer for **FINAL FANTASY XII THE ZODIAC AGE** (Steam), in the spirit of
 [ffx-randomizer](https://github.com/ybadragon/ffx-randomizer). It needs no third-party mod loader:
 it ships its own small `dinput8.dll` loader, and the 31 GB game archive is never modified.
 
-> Status: the loader is proven in game. Randomization features and the WPF app are next.
+## Features
+
+| Option | Works on existing saves | Confirmed in game |
+| --- | --- | --- |
+| Treasure chests (shuffle/randomize, gil amounts) | yes, unopened chests | yes |
+| Shops (shuffle/randomize) | yes | yes |
+| Shop prices (consumables, equipment) | yes | not yet |
+| Bazaar packages | yes | not yet |
+| Enemy drops, steals, poaches | yes | not yet |
+| Enemy stats | yes | not yet |
+| Elemental affinities | yes | not yet |
+| Weapon and armor stats | yes | not yet |
+| License boards, Espers, Quickenings | new game | not yet |
+| Vaan starts with 99 Potions (test mod) | new game | yes |
+
+Untested options carry an "Untested" badge in the app until confirmed.
+
+## Data formats used by the features
+
+All in `battle_pack.bin` (`ps2data/image/ff12/test_battle/us/binaryfile/`) unless noted. Each was
+matched against known in-game values before use.
+
+| Data | Where | Notes |
+| --- | --- | --- |
+| Shop stock | section 39 | node tree; located per map via script call `0x048D(2, list)` |
+| Consumable prices | section 18, u16 @0x0A | found from Potion 60 / Hi-Potion 180 / Ether 222 |
+| Equipment | section 13 (record i = item 0x1000+i) | price @0x12, weapon attack @0x1A, armor 0x18/0x19 |
+| Licenses | section 12 (type @0x05) | names: section 61 text table 3 |
+| Bazaar | section 57 | names: text table 9 |
+| Party starting data | section 16 | items @0x58, amounts @0x34 |
+| Enemy names | section 61 text table 8 | index = NameID & 0xFFF |
+| Treasure | `plan_master/us/plan_map/<area>/<map>/global/<map>.ebp` | 0x18-byte chest records |
+| Enemy rewards / stats / elements | `plan_master/in/plan_map/<area>/area/<area>.ard` | basic info drops 0x28, steals 0x32, poaches 0x44; stats 0x20-0x2D; element masks 0x29-0x2D |
+| License boards | `test_battle/in/binaryfile/board_1..12.bin` | `licd` + 24x24 u16 ids |
+| Job names | `menu_command.bin` (st2e) ids 10100-10111 | board order |
 
 ## How it works
 

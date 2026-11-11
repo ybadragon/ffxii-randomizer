@@ -105,8 +105,8 @@ public static class OptionCatalog
         ]),
         new("gear", "Gear", "Weapon and armor stats.",
         [
-            Toggle("wstats", "Weapon stats", "Attack power and other weapon stats are randomized."),
-            Toggle("astats", "Armor stats", "Defense, magick resist and bonuses on armor and accessories are randomized."),
+            Toggle("wstats", "Weapon stats", "Each weapon's attack power, and ammunition's, changes around its original. With Keep things sane it stays within -25% and +30%; without, anywhere from 40% to 200%. Gear you already own changes too.", badge: "Untested", implemented: true),
+            Toggle("astats", "Armor stats", "Defense and magick resist on body and head armor, and evade and magick evade on shields, change around their original values. With Keep things sane they stay within -25% and +30%; without, anywhere from 40% to 200%. Accessories keep their bonuses.", badge: "Untested", implemented: true),
         ]),
         new("general", "General", "Settings that apply to the whole randomizer.",
         [

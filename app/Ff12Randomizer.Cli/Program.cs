@@ -511,6 +511,64 @@ switch (args[0])
             break;
         }
 
+    case "diffsize":
+        {
+            // diffsize <dir>: how different each edited file is from the vanilla archive copy (same length? changed bytes?)
+            long total = 0, changedBytes = 0, sameLength = 0, files = 0, identical = 0;
+            foreach (var path in Directory.GetFiles(args[1]).Where(p => !p.EndsWith(".txt")))
+            {
+                var ve = vbf.Entries.FirstOrDefault(e => e.Name.Replace('/', '_') == Path.GetFileName(path));
+                if (ve is null) continue;
+                var edited = File.ReadAllBytes(path);
+                var vanilla = vbf.Extract(ve);
+                files++;
+                total += edited.Length;
+                if (edited.AsSpan().SequenceEqual(vanilla)) { identical++; continue; }
+                if (edited.Length == vanilla.Length) sameLength++;
+                int n = Math.Min(edited.Length, vanilla.Length);
+                for (int i = 0; i < n; i++) if (edited[i] != vanilla[i]) changedBytes++;
+                changedBytes += Math.Abs(edited.Length - vanilla.Length);
+            }
+            Console.WriteLine($"{files} files ({total / 1048576.0:F1} MB): {identical} identical to vanilla, {sameLength} same length, {changedBytes / 1024} KB of differing bytes");
+            break;
+        }
+
+    case "repacktest":
+        {
+            // Repacking battle_pack.bin (and its section 61) with no replacements must give back the identical file.
+            var bp = vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!);
+            var same = Ff12Randomizer.Core.GameData.BattlePack.Repack(bp, new Dictionary<int, byte[]>());
+            var s61 = new Ff12Randomizer.Core.GameData.BattlePack(bp).Section(61);
+            var same61 = Ff12Randomizer.Core.GameData.BattlePack.Repack(s61, new Dictionary<int, byte[]>(), alignment: 4);
+            Console.WriteLine($"battle_pack identical: {same.AsSpan().SequenceEqual(bp)} ({same.Length} vs {bp.Length}); section 61 identical: {same61.AsSpan().SequenceEqual(s61)}");
+            break;
+        }
+
+    case "packopenworld":
+        {
+            // packopenworld <dir of downloaded files, '/' replaced by '_'> <out.zip>: zips the files that differ from the
+            // vanilla archive under their archive paths, plus pieces that aren't archive files (battle_pack sections).
+            var known = File.ReadAllLines(Path.Combine(args[1], "..", "bartz_files.txt")).Select(l => l.Split(' ')[1]).ToList();
+            int added = 0, skipped = 0;
+            File.Delete(args[2]);
+            using (var zip = System.IO.Compression.ZipFile.Open(args[2], System.IO.Compression.ZipArchiveMode.Create))
+            {
+                foreach (string archivePath in known)
+                {
+                    string local = Path.Combine(args[1], archivePath.Replace('/', '_'));
+                    var bytes = File.ReadAllBytes(local);
+                    var ve = vbf.Find(archivePath);
+                    if (ve is not null && vbf.Extract(ve).AsSpan().SequenceEqual(bytes)) { skipped++; continue; }
+                    var zipEntry = zip.CreateEntry(archivePath, System.IO.Compression.CompressionLevel.SmallestSize);
+                    using var stream = zipEntry.Open();
+                    stream.Write(bytes);
+                    added++;
+                }
+            }
+            Console.WriteLine($"{added} files packed, {skipped} identical to vanilla skipped, {new FileInfo(args[2]).Length / 1048576.0:F1} MB");
+            break;
+        }
+
     case "callscan":
         {
             // callscan <hexCallId>...: every "PUSHII n; CALL/CALLPOPA id" in the US map scripts, i.e. bytes

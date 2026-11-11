@@ -27,6 +27,41 @@ public sealed class BattlePack(byte[] data)
     /// <summary>A table section's records, as writable slices of <see cref="Data"/>.</summary>
     public TableSection Table(int section) => new(Data, SectionOffset(section));
 
+    /// <summary>The bytes of one section (up to the next section's start, or the end of the file).</summary>
+    public byte[] Section(int section) => Section(Data, section);
+
+    private static byte[] Section(byte[] data, int section)
+    {
+        int count = (int)BinaryPrimitives.ReadUInt32LittleEndian(data);
+        int start = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(4 + section * 4));
+        int end = section + 1 < count ? (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(8 + section * 4)) : data.Length;
+        return data.AsSpan(start, end - start).ToArray();
+    }
+
+    /// <summary>
+    /// A copy of a packed file (battle_pack.bin, or section 61 which has the same layout: u32 count, u32 offsets, then the
+    /// parts) with some parts replaced. Parts start on <paramref name="alignment"/> byte boundaries (8 in battle_pack.bin,
+    /// 4 in section 61, as in the originals), and the offset table is
+    /// rebuilt, so replacements may change size.
+    /// </summary>
+    public static byte[] Repack(byte[] data, IReadOnlyDictionary<int, byte[]> replacements, int alignment = 8)
+    {
+        int count = (int)BinaryPrimitives.ReadUInt32LittleEndian(data);
+        int first = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(4));
+        var output = new MemoryStream();
+        output.Write(data.AsSpan(0, first)); // count, offsets (rewritten below) and any padding before the first part
+        var offsets = new int[count];
+        for (int s = 0; s < count; s++)
+        {
+            while (output.Length % alignment != 0) output.WriteByte(0);
+            offsets[s] = (int)output.Length;
+            output.Write(replacements.TryGetValue(s, out var part) ? part : Section(data, s));
+        }
+        var result = output.ToArray();
+        for (int s = 0; s < count; s++) BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(4 + s * 4), (uint)offsets[s]);
+        return result;
+    }
+
     /// <summary>Section 61: the battle text tables (0 abilities, 1 equipment, 8 character and enemy names...).</summary>
     public const int TextSection = 61, NamesTable = 8;
 

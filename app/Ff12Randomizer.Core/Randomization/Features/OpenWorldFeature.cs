@@ -23,6 +23,7 @@ public sealed class OpenWorldFeature : IRandomizerFeature
     public const string Id = "openworld";
     public const string HuntRewardsLoaderFeature = "hunt_rewards";
     public const int RewardsSection = 37, RewardSize = 0xC;
+    public const int PricesSection = 28, PartyOrderRecord = 0x76, StartingBoardsRecord = 0x77;
     private static readonly int[] Sections = [37, 28, 32];
     private static readonly int[] TextTables = [11, 12];
 
@@ -44,6 +45,11 @@ public sealed class OpenWorldFeature : IRandomizerFeature
         var sections = Sections.Where(world.Sections.ContainsKey).ToDictionary(s => s, s => world.Sections[s]);
         sections[BattlePack.TextSection] = section61;
         context.Replace(BattlePack.UsPath, BattlePack.Repack(pack.Data, sections));
+
+        // The new game script (naf_a01) reads each character's starting license board from price record 0x77 and writes
+        // it through a save memory window the unmodded game rejects. 0 = no preset boards, so that write never runs.
+        var prices = new BattlePack(context.Edit(BattlePack.UsPath)).Table(PricesSection);
+        BinaryPrimitives.WriteUInt32LittleEndian(prices.Record(StartingBoardsRecord), 0);
 
         context.LoaderFeatures.Add(HuntRewardsLoaderFeature);
         SpoilRewards(context);
@@ -75,9 +81,11 @@ public sealed class OpenWorldFeature : IRandomizerFeature
 
     public IEnumerable<string> Validate(RandomizerContext context)
     {
-        // The scripts read the party order from prices record 0x76; it must decode to the vanilla order.
-        var prices = new BattlePack(context.Edit(BattlePack.UsPath)).Table(28);
-        uint order = BinaryPrimitives.ReadUInt32LittleEndian(prices.Record(0x76));
+        // The scripts read the party order from price record 0x76 (must be the vanilla order) and starting boards from 0x77.
+        var prices = new BattlePack(context.Edit(BattlePack.UsPath)).Table(PricesSection);
+        uint order = BinaryPrimitives.ReadUInt32LittleEndian(prices.Record(PartyOrderRecord));
         if (order != 44790) yield return $"Open world: party order value is {order}, expected 44790 (Vaan, Balthier, Fran, Basch, Ashe, Penelo).";
+        uint boards = BinaryPrimitives.ReadUInt32LittleEndian(prices.Record(StartingBoardsRecord));
+        if (boards != 0) yield return $"Open world: starting board value is {boards}, expected 0 (no preset boards).";
     }
 }

@@ -21,6 +21,8 @@
     <EmbeddedResource Include="Data\*.csv" LogicalName="data/%(Filename)%(Extension)" />
     <!-- Open world base files from Bartz24/FFModdingWPF (MIT, see third_party/FFModdingWPF/openworld). -->
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\third_party\FFModdingWPF\openworld\openworld.zip" LogicalName="openworld.zip" />
+    <!-- Repaired open world scripts (see third_party/FFModdingWPF/openworld/fixes/README.md). -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\third_party\FFModdingWPF\openworld\fixes\pre_z0000.ebp" LogicalName="openworld-fix/ps2data/plan_master/us/event/pre_z/pre_z0000/pre_z0000.ebp" />
   </ItemGroup>
 
   <ItemGroup>

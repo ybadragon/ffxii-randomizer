@@ -36,6 +36,101 @@ if (args[0] == "respoil")
     return 0;
 }
 
+if (args[0] == "owoverride")
+{
+    // owoverride <seed> <dir> [options...]: install a full open world run, with files from <dir> (archive paths with '/'
+    // replaced by '_') swapped in on top. For testing script fixes.
+    var game = Ff12Randomizer.Core.Game.GameInstall.FindSteamInstall()!;
+    var patcher = new Ff12Randomizer.Core.Patching.PatchManager(game);
+    var archive = patcher.OpenOriginal();
+    var settings = Ff12Randomizer.Core.Randomization.RandomizerSettings.Defaults();
+    settings.Toggles["openworld"] = true;
+    foreach (string id in args.Skip(3))
+    {
+        if (id.Split('=') is [var key, var value]) settings.Choices[key] = value; else settings.Toggles[id] = true;
+    }
+    var run = Ff12Randomizer.Core.Randomization.RandomizerEngine.Run(archive, settings, new Ff12Randomizer.Core.Randomization.Seed(args[1]));
+    var files = run.Files.ToDictionary(kv => kv.Key, kv => kv.Value);
+    foreach (var path in Directory.GetFiles(args[2]))
+    {
+        var entry = archive.Entries.FirstOrDefault(e => e.Name.Replace('/', '_') == Path.GetFileName(path)) ?? throw new FileNotFoundException(path);
+        files[entry.Name] = File.ReadAllBytes(path);
+        Console.WriteLine($"override {entry.Name} ({new FileInfo(path).Length} bytes, vanilla {entry.Size})");
+    }
+    string fp = patcher.Apply(archive, files, run.LoaderFeatures);
+    Console.WriteLine($"installed {files.Count} files, fingerprint {fp}, loader features [{string.Join(", ", run.LoaderFeatures ?? [])}]");
+    return 0;
+}
+
+if (args[0] == "owtest")
+{
+    // owtest <bp|bppad|pad>: install parts of the open world to find what the game rejects.
+    //   bp     battle_pack with the open world sections, size changed
+    //   bppad  the same, padded to the original size
+    //   pad    everything, smaller files padded to their original size, larger files left out
+    var game = Ff12Randomizer.Core.Game.GameInstall.FindSteamInstall()!;
+    var patcher = new Ff12Randomizer.Core.Patching.PatchManager(game);
+    var archive = patcher.OpenOriginal();
+    var world = Ff12Randomizer.Core.GameData.OpenWorldBase.Load();
+    var files = new Dictionary<string, byte[]>();
+    byte[] Pad(byte[] data, int length) { var padded = new byte[length]; data.CopyTo(padded, 0); return padded; }
+    var bp = archive.Extract(archive.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!);
+    var pack = new Ff12Randomizer.Core.GameData.BattlePack(bp);
+    var s61 = Ff12Randomizer.Core.GameData.BattlePack.Repack(pack.Section(61), new[] { 11, 12 }.ToDictionary(t => t, t => world.TextTables[t]), alignment: 4);
+    var sections = new[] { 37, 28, 32 }.ToDictionary(s => s, s => world.Sections[s]);
+    sections[61] = s61;
+    var newBp = Ff12Randomizer.Core.GameData.BattlePack.Repack(bp, sections);
+    Console.WriteLine($"battle_pack {bp.Length} -> {newBp.Length}");
+    files[Ff12Randomizer.Core.GameData.BattlePack.UsPath] = args[1] == "bp" ? newBp : Pad(newBp, Math.Max(bp.Length, newBp.Length));
+    if (args[1] == "pad")
+    {
+        int skipped = 0;
+        foreach (var (path, data) in world.Files)
+        {
+            var e = archive.Find(path);
+            if (e is null) continue;
+            if (args.Length > 3 && path.Contains(args[3])) { skipped++; continue; }
+            if (data.Length > (int)e.Size) { skipped++; if (args.Length < 3) continue; files[path] = data; continue; }
+            files[path] = Pad(data, (int)e.Size);
+        }
+        Console.WriteLine($"{files.Count} files, {skipped} larger files left out");
+    }
+    string fp = patcher.Apply(archive, files, args[1] == "pad" ? ["hunt_rewards"] : []);
+    Console.WriteLine($"installed {args[1]}: fingerprint {fp}");
+    return 0;
+}
+
+if (args[0] is "install" or "reinstall")
+{
+    // install <seed> <options...>: apply a run to the game without recording it in History (for testing).
+    // reinstall <seed>: re-apply a History run and check it produces the exact same patch it did originally.
+    var game = Ff12Randomizer.Core.Game.GameInstall.FindSteamInstall() ?? throw new InvalidOperationException("Game not found.");
+    var patcher = new Ff12Randomizer.Core.Patching.PatchManager(game);
+    var archive = patcher.OpenOriginal();
+    Ff12Randomizer.Core.Randomization.RandomizerSettings settings;
+    string? expected = null;
+    if (args[0] == "reinstall")
+    {
+        var entry = new Ff12Randomizer.Core.Storage.HistoryStore(Ff12Randomizer.Core.Storage.AppPaths.Default).Entries.First(e => e.Seed == args[1]);
+        settings = entry.Settings;
+        expected = entry.PatchedFingerprint;
+    }
+    else
+    {
+        settings = Ff12Randomizer.Core.Randomization.RandomizerSettings.Defaults();
+        foreach (string id in args.Skip(2))
+        {
+            if (id.Split('=') is [var key, var value]) settings.Choices[key] = value; else settings.Toggles[id] = true;
+        }
+    }
+    var run = Ff12Randomizer.Core.Randomization.RandomizerEngine.Run(archive, settings, new Ff12Randomizer.Core.Randomization.Seed(args[1]));
+    if (run.Problems.Count > 0) throw new InvalidOperationException(run.Problems[0]);
+    string fingerprint = patcher.Apply(archive, run.Files, run.LoaderFeatures);
+    Console.WriteLine($"installed seed {args[1]}: {run.Files.Count} files, fingerprint {fingerprint}, loader features [{string.Join(", ", run.LoaderFeatures ?? [])}]"
+        + (expected is null ? "" : fingerprint == expected ? " (matches History)" : $" (DIFFERENT from History {expected})"));
+    return 0;
+}
+
 if (args[0] is "randomize" or "restore")
 {
     // Full pipeline without the window: ff12rando randomize <seed> <toggle ids...> | restore
@@ -206,7 +301,9 @@ switch (args[0])
     case "whatread":
         {
             // Maps "fread N at OFFSET" lines in loader.log back to archive files, in first-read order.
-            var byOffset = vbf.Entries.Where(e => e.Size > 0).OrderBy(e => e.Offset).ToArray();
+            // With a patch file as a third argument, offsets are resolved through the patched (virtual) archive.
+            var view = args.Length > 2 ? new VbfArchive(vbf.Path, () => new VirtualVbfStream(vbf.Path, args[2])) : vbf;
+            var byOffset = view.Entries.Where(e => e.Size > 0).OrderBy(e => e.Offset).ToArray();
             var starts = byOffset.Select(e => e.Offset).ToArray();
             var seen = new HashSet<string>();
             var rx = new System.Text.RegularExpressions.Regex(@"fread (\d+) at ([0-9a-f]+)");
@@ -228,13 +325,13 @@ switch (args[0])
                 {
                     name = "(header)";
                 }
-                else if (at >= (ulong)new FileInfo(vbf.Path).Length)
+                else if (args.Length < 3 && at >= (ulong)new FileInfo(vbf.Path).Length)
                 {
                     name = "(patch region)";
                 }
                 if (seen.Add(name))
                 {
-                    var e = vbf.Find(name);
+                    var e = view.Find(name);
                     Console.WriteLine($"{seen.Count,4} {e?.Size,10} {name}");
                 }
             }
@@ -582,6 +679,30 @@ switch (args[0])
                 byte[] vanilla = m.Count == 2 ? new Ff12Randomizer.Core.GameData.BattlePack(s61).Section(m[1]) : bp.Section(m[0]);
                 int diff = 0; for (int i = 0; i < Math.Min(edited.Length, vanilla.Length); i++) if (edited[i] != vanilla[i]) diff++;
                 Console.WriteLine($"{string.Join("/", m),-6} vanilla {vanilla.Length,6} edited {edited.Length,6} differing bytes {diff}");
+            }
+            break;
+        }
+
+    case "ebpcalls":
+        {
+            // ebpcalls <archive path> <edited file>: call ids (PUSHII-preceded CALL family) used by vanilla vs edited.
+            static List<(int At, ushort Id)> Calls(byte[] b)
+            {
+                var list = new List<(int, ushort)>();
+                for (int p = 3; p + 3 <= b.Length; p++)
+                    if (b[p] is 0x58 or 0x59 or 0x5D or 0x5E && (b[p - 3] == 0x4F || b[p - 1] is 0x00 or 0x01))
+                        list.Add((p, (ushort)(b[p + 1] | b[p + 2] << 8)));
+                return list;
+            }
+            var vanilla = vbf.Extract(vbf.Find(args[1])!);
+            var edited = File.ReadAllBytes(args[2]);
+            Console.WriteLine($"vanilla {vanilla.Length} bytes, edited {edited.Length} bytes");
+            var v = Calls(vanilla).GroupBy(c => c.Id).ToDictionary(g => g.Key, g => g.Count());
+            var e = Calls(edited).GroupBy(c => c.Id).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var id in e.Keys.Union(v.Keys).OrderBy(i => i))
+            {
+                int a = v.GetValueOrDefault(id), b = e.GetValueOrDefault(id);
+                if (a != b) Console.WriteLine($"  call 0x{id:X4}: vanilla {a}, edited {b}");
             }
             break;
         }

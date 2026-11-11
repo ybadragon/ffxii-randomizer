@@ -49,6 +49,16 @@ public sealed partial class OpenWorldBase
             else if (match.Groups[2].Success) textTables[int.Parse(match.Groups[2].Value)] = bytes;
             else sections[int.Parse(match.Groups[1].Value)] = bytes;
         }
+        // Repaired scripts replace the pack's versions (the pack's need Insurgent's Manifesto; see openworld/fixes).
+        const string fixPrefix = "openworld-fix/";
+        foreach (string resource in Assembly.GetExecutingAssembly().GetManifestResourceNames().Where(n => n.StartsWith(fixPrefix)))
+        {
+            using var fix = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource)!;
+            using var data = new MemoryStream();
+            fix.CopyTo(data);
+            files[resource[fixPrefix.Length..]] = data.ToArray();
+        }
+
         return new OpenWorldBase(files, sections, textTables);
     }
 

@@ -57,7 +57,7 @@ public sealed partial class HistoryItemViewModel(HistoryEntry entry, bool curren
 
     [RelayCommand] private void UseSettings() => main.UseHistorySettings(entry, replaySeed: false);
     [RelayCommand] private void ReplaySeed() => main.UseHistorySettings(entry, replaySeed: true);
-    [RelayCommand] private void OpenSpoiler() => main.OpenFile(entry.SpoilerPath);
+    [RelayCommand] private void OpenSpoiler() => main.ShowSpoiler(entry.SpoilerPath);
     [RelayCommand] private void Delete() => main.DeleteHistory(entry);
 
     [ObservableProperty] private bool _seedCopied;

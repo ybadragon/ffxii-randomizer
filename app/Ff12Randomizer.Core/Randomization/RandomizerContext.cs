@@ -54,6 +54,9 @@ public sealed class RandomizerContext(VbfArchive original, RandomizerSettings se
     /// <summary>Adds one entry (any serializable object, camelCased) to a spoiler section.</summary>
     public void Spoil(string section, object entry) => SectionList(section).Add(ToNode(entry));
 
+    /// <summary>A value that changed, written as {"was": .., "now": ..}; the app's spoiler viewer shows it as "was → now".</summary>
+    public static object Change(long was, long now) => new { was, now };
+
     /// <summary>
     /// The spoiler entry for one thing (e.g. one enemy), shared by every feature that changes it, so each adds its own
     /// properties to the same object. <paramref name="identity"/> seeds a new entry's first properties.

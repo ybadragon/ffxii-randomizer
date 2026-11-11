@@ -482,6 +482,21 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>Opens a spoiler log in the app's viewer; if it can't be read, offers the file itself.</summary>
+    public void ShowSpoiler(string? path)
+    {
+        if (path is null || !File.Exists(path)) return;
+        try
+        {
+            Overlay = new SpoilerViewModel(this, path, returnTo: Overlay);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
+        {
+            ShowProblem("Couldn't show the spoiler log", $"{e.Message} You can still open the file itself.", ProblemTone.Warning,
+                "Open the file", () => { CloseOverlay(); OpenFile(path); }, "Cancel", CloseOverlay);
+        }
+    }
+
     public void CloseOverlay() => Overlay = null;
 
     private void ShowProblem(string title, string message, ProblemTone tone, string action, Action onAction,

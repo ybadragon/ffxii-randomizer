@@ -38,7 +38,7 @@ public sealed class GearStatsFeature : IRandomizerFeature
             {
                 if (catalog.Find((ushort)(FirstEquipId + i)) is not { Category: var c, Name: var name } || c != category) continue;
                 var record = table.Record(i);
-                var changes = new Dictionary<string, int[]>();
+                var changes = new Dictionary<string, object>();
                 for (int f = 0; f < fields.Length; f++)
                 {
                     byte before = record[fields[f]];
@@ -47,7 +47,7 @@ public sealed class GearStatsFeature : IRandomizerFeature
                     record[fields[f]] = after;
                     // Body and head armor carry flag 0x40 at 0x07; shields don't, and use the same bytes for evade.
                     string label = category == ItemCategory.Armor && (record[0x07] & 0x40) == 0 ? (f == 0 ? "evade" : "magick evade") : labels[f];
-                    if (after != before) changes[label] = [before, after];
+                    if (after != before) changes[label] = RandomizerContext.Change(before, after);
                 }
                 if (changes.Count > 0) context.Spoil(option == Weapons ? "weapons" : "armor", new { item = name, stats = changes });
             }

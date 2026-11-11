@@ -39,7 +39,7 @@ public sealed class ShopPricesFeature : IRandomizerFeature
                 if (before <= 1) continue;
                 ushort after = Roll(rng, before, sane);
                 BinaryPrimitives.WriteUInt16LittleEndian(record[offset..], after);
-                if (after != before) context.Spoil("prices", new { item = item.Name, price = new[] { (int)before, after } });
+                if (after != before) context.Spoil("prices", new { item = item.Name, price = RandomizerContext.Change(before, after) });
             }
         }
     }

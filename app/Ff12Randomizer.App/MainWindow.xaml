@@ -347,6 +347,107 @@
             </Grid>
         </DataTemplate>
 
+        <!-- Spoiler log viewer: sections on the left, a sortable table on the right, one search over everything. -->
+        <DataTemplate DataType="{x:Type vm:SpoilerViewModel}">
+            <Grid Background="{StaticResource Window}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.InputBindings>
+                    <KeyBinding Key="Escape" Command="{Binding CloseCommand}" />
+                </Grid.InputBindings>
+
+                <Border Background="{StaticResource Rail}" BorderBrush="{StaticResource Divider}" BorderThickness="0,0,0,1" Padding="24,16,24,14">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Content="Back" Command="{Binding CloseCommand}"
+                                    Margin="0,0,16,0" VerticalAlignment="Center" ToolTip="Back (Esc)" />
+                            <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Open the file" Command="{Binding OpenFileCommand}"
+                                    VerticalAlignment="Center" ToolTip="Open the spoiler log's JSON file in another program" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Spoiler log" Style="{StaticResource PageTitle}" />
+                                <TextBlock Style="{StaticResource Small}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Summary}">
+                                    <Run Text="{Binding Subtitle, Mode=OneWay}" Foreground="{StaticResource Text}" /><Run Text=" · " /><Run Text="{Binding Summary, Mode=OneWay}" />
+                                </TextBlock>
+                            </StackPanel>
+                        </DockPanel>
+                        <DockPanel Margin="0,14,0,0">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding ResultLabel}" Style="{StaticResource Muted}" VerticalAlignment="Center"
+                                       MinWidth="150" TextAlignment="Right" Margin="16,0,0,0" />
+                            <TextBox x:Name="SpoilerSearch" Style="{StaticResource Input}" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=150}"
+                                     mah:TextBoxHelper.Watermark="Search everything: an item, enemy, place or merchant (all words must match)"
+                                     mah:TextBoxHelper.ClearTextButton="True" AutomationProperties.Name="Search the spoiler log"
+                                     Loaded="SpoilerSearch_Loaded" />
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Grid.Row="1" Text="This spoiler log has nothing to show: the run didn't change anything it lists."
+                           Style="{StaticResource Muted}" Margin="24" Visibility="{Binding IsEmpty, Converter={StaticResource Show}}" />
+
+                <Grid Grid.Row="1" Visibility="{Binding IsEmpty, Converter={x:Static vm:Converters.HideWhenTrue}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Background="{StaticResource Rail}" BorderBrush="{StaticResource Divider}" BorderThickness="0,0,1,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,8">
+                            <ItemsControl ItemsSource="{Binding Sections}" AutomationProperties.Name="Spoiler sections">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:SpoilerSectionViewModel}">
+                                        <RadioButton x:Name="Tab" Style="{StaticResource RailTab}" GroupName="SpoilerSections" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                                     Command="{Binding DataContext.SelectCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                     CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title}">
+                                            <DockPanel>
+                                                <Border DockPanel.Dock="Right" Style="{StaticResource Chip}">
+                                                    <TextBlock Text="{Binding CountLabel}" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                        </RadioButton>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding MatchCount}" Value="0">
+                                                <Setter TargetName="Tab" Property="Opacity" Value="0.45" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+
+                    <DataGrid Grid.Column="1" ItemsSource="{Binding Selected.View}" AutoGenerateColumns="True" AutoGeneratingColumn="SpoilerGrid_AutoGeneratingColumn"
+                              Style="{StaticResource MahApps.Styles.DataGrid}" IsReadOnly="True" CanUserSortColumns="True" CanUserReorderColumns="True"
+                              CanUserResizeColumns="True" SelectionMode="Extended" SelectionUnit="FullRow" ClipboardCopyMode="IncludeHeader"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{StaticResource Divider}"
+                              Background="{StaticResource Panel}" RowBackground="{StaticResource Panel}" AlternatingRowBackground="{StaticResource PanelSunken}"
+                              Foreground="{StaticResource Text}" BorderThickness="0" FontSize="13" Margin="0"
+                              EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.ScrollUnit="Pixel"
+                              AutomationProperties.Name="Spoiler entries">
+                        <DataGrid.ColumnHeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource MahApps.Styles.DataGridColumnHeader}">
+                                <Setter Property="Background" Value="{StaticResource PanelHeader}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextStrong}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <Setter Property="Padding" Value="10,8" />
+                                <Setter Property="mah:ControlsHelper.ContentCharacterCasing" Value="Normal" />
+                            </Style>
+                        </DataGrid.ColumnHeaderStyle>
+                        <DataGrid.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource MahApps.Styles.DataGridCell}">
+                                <Setter Property="Padding" Value="10,6" />
+                            </Style>
+                        </DataGrid.CellStyle>
+                    </DataGrid>
+
+                    <TextBlock Grid.Column="1" Style="{StaticResource Muted}" Margin="24,56,24,0" HorizontalAlignment="Center"
+                               Text="Nothing in any section matches your search." Visibility="{Binding Selected.MatchCount, Converter={x:Static vm:Converters.ShowWhenZero}}" />
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
         <DataTemplate DataType="{x:Type vm:ProblemViewModel}">
             <Grid Background="#B30B0F14">
                 <Border Style="{StaticResource Card}" Width="480" VerticalAlignment="Center" HorizontalAlignment="Center">

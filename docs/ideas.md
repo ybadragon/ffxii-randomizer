@@ -14,7 +14,6 @@ a game relaunch, which matters most for playing with friends. "Data" says how mu
 | Confirm the untested options in game | – | known | Biggest remaining risk. A short checklist per option (what to look at, where) would make tonight's test fast. |
 | Open world key item placement | new game | likely | Bartz24's logic places the key items with a reachability solver. Today we ship his default layout, so every open world seed has the same key items in the same places. Needs his requirement graph (areas, connections, key item rules) ported. One-time chests may need his treasure bank (max 255 respawn ids). |
 | Seed hash shown in game | yes | known | Write a short code (four item names, say) into a menu string in text table 61, so friends can see at a glance that they're on the same seed. |
-| Spoiler browser in the app | – | known | A search box over the JSON spoiler ("where is Genji Shield?"), grouped by region. This is the point of the spoiler, and it saves digging through raw JSON. |
 
 ## New randomizers that work on existing saves
 
@@ -52,6 +51,6 @@ a game relaunch, which matters most for playing with friends. "Data" says how mu
 ## Suggested next three
 
 1. In-game checklist for tonight's test, then mark the confirmed options in the README and the app badges.
-2. Seed hash in game + spoiler search in the app: cheap, and both help directly with playing alongside friends.
+2. Seed hash in game: cheap, and helps directly with playing alongside friends.
 3. Open world key item placement, once the base open world is confirmed playable. It's the largest piece left and
    only worth it on a stable base.

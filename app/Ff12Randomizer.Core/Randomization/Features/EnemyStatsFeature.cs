@@ -73,12 +73,12 @@ public sealed class EnemyStatsFeature : IRandomizerFeature
 
                 if (!level && spoiler is null)
                 {
-                    var stats = new Dictionary<string, long[]>
+                    var stats = new Dictionary<string, object>
                     {
-                        ["hp"] = [hpBefore, BinaryPrimitives.ReadUInt32LittleEndian(record[HpOffset..])],
-                        ["mp"] = [mpBefore, BinaryPrimitives.ReadUInt16LittleEndian(record[MpOffset..])],
+                        ["hp"] = RandomizerContext.Change(hpBefore, BinaryPrimitives.ReadUInt32LittleEndian(record[HpOffset..])),
+                        ["mp"] = RandomizerContext.Change(mpBefore, BinaryPrimitives.ReadUInt16LittleEndian(record[MpOffset..])),
                     };
-                    for (int s = 0; s < ByteStats.Length; s++) stats[ByteStats[s].Name] = [bytesBefore[s], record[ByteStats[s].Offset]];
+                    for (int s = 0; s < ByteStats.Length; s++) stats[ByteStats[s].Name] = RandomizerContext.Change(bytesBefore[s], record[ByteStats[s].Offset]);
                     spoiler = new
                     {
                         enemy = pack.Text(BattlePack.NamesTable, nameId & 0x0FFF) ?? $"Enemy {nameId:X4}",

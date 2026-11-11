@@ -7,7 +7,7 @@ namespace Ff12Randomizer.Core.Storage;
 public static class SpoilerLog
 {
     public const string Format = "ffxii-randomizer-spoiler";
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     /// <summary>
     /// Writes the spoiler as JSON: run details first, then one section per area of the game

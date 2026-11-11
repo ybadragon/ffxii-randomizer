@@ -84,7 +84,7 @@ public sealed partial class RunViewModel : ObservableObject
     }
 
     [RelayCommand] private void LaunchGame() => _main.LaunchGame();
-    [RelayCommand] private void OpenSpoiler() => _main.OpenFile(Entry?.SpoilerPath);
+    [RelayCommand] private void OpenSpoiler() => _main.ShowSpoiler(Entry?.SpoilerPath);
     [RelayCommand] private void Close() => _main.CloseOverlay();
 
     [RelayCommand]

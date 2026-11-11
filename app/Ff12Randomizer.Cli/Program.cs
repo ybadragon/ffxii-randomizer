@@ -391,6 +391,18 @@ switch (args[0])
             break;
         }
 
+    case "spoilerview":
+        {
+            // What the app's spoiler viewer shows: spoilerview <spoiler.json>
+            var doc = Ff12Randomizer.Core.Storage.SpoilerDocument.Load(args[1]);
+            Console.WriteLine($"seed {doc.Seed}, {doc.CreatedAt}, {string.Join(" | ", doc.Summary)}");
+            foreach (var t in doc.Tables)
+            {
+                Console.WriteLine($"[{t.Title}] {t.Rows.Count} rows: {string.Join(" | ", t.Columns)}");
+                foreach (var row in t.Rows.Take(2)) Console.WriteLine("  " + string.Join(" | ", row));
+            }
+            return 0;
+        }
     case "dryrun":
         {
             // Runs the features without installing anything: dryrun <seed> <toggle or id=choice...>
@@ -403,6 +415,17 @@ switch (args[0])
             var run = Ff12Randomizer.Core.Randomization.RandomizerEngine.Run(vbf, settings, new Ff12Randomizer.Core.Randomization.Seed(args[1]));
             Console.WriteLine($"{sw.ElapsedMilliseconds} ms, {run.Files.Count} files changed, {run.Problems.Count} problems");
             foreach (var p in run.Problems.Take(10)) Console.WriteLine($"  PROBLEM {p}");
+            if (args.Contains("-t"))
+            {
+                var root = new System.Text.Json.Nodes.JsonObject();
+                foreach (var (section, node) in run.Spoiler) root[section] = node?.DeepClone();
+                foreach (var t in Ff12Randomizer.Core.Storage.SpoilerDocument.Parse(root).Tables)
+                {
+                    Console.WriteLine($"[{t.Title}] {t.Rows.Count} rows: {string.Join(" | ", t.Columns)}");
+                    foreach (var row in t.Rows.Take(2)) Console.WriteLine("  " + string.Join(" | ", row));
+                }
+                break;
+            }
             foreach (var (section, node) in run.Spoiler)
             {
                 var list = node!.AsArray();

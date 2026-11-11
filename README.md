@@ -4,6 +4,24 @@ Randomizer for **FINAL FANTASY XII THE ZODIAC AGE** (Steam), in the spirit of
 [ffx-randomizer](https://github.com/ybadragon/ffx-randomizer). It needs no third-party mod loader:
 it ships its own small `dinput8.dll` loader, and the 31 GB game archive is never modified.
 
+## Getting started
+
+1. Download `FFXII-Randomizer-vX.Y.Z.exe` from [Releases](../../releases). It's a single self-contained file with nothing
+   else to install.
+2. Close the game, then run the exe. Windows SmartScreen may warn because the app isn't signed; click
+   **More info → Run anyway**.
+3. Pick your options and click **Randomize**.
+4. Launch the game. Most options work on existing saves (see the table below); the rest need a **New Game**.
+
+The app finds your Steam copy automatically. If it can't, it asks you for the game folder.
+
+| Pick your options | Find anything in the spoiler log |
+|---|---|
+| ![The Treasure & Shops tab](docs/images/treasure-shops.png) | ![The spoiler log viewer showing the Shops section](docs/images/spoiler-viewer.png) |
+
+To undo it, click **Restore original**. That removes the loader and the `ff12rando` folder; the game files themselves
+are never changed.
+
 ## Features
 
 | Option | Works on existing saves | Confirmed in game |

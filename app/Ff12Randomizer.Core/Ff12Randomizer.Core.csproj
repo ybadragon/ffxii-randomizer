@@ -1,9 +1,26 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <LoaderDll>$(MSBuildThisFileDirectory)..\..\loader\bin\dinput8.dll</LoaderDll>
+  </PropertyGroup>
+
+  <!-- The loader DLL ships inside the app; build it with the MSVC Build Tools if it isn't there yet. -->
+  <Target Name="BuildLoader" BeforeTargets="BeforeBuild" Condition="!Exists('$(LoaderDll)')">
+    <Exec Command="&quot;$(MSBuildThisFileDirectory)..\..\loader\build.cmd&quot;" />
+  </Target>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(LoaderDll)" LogicalName="dinput8.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ff12Randomizer.Tests" />
+  </ItemGroup>
 
 </Project>

@@ -90,6 +90,16 @@ public sealed class VbfArchive
         byName = entries.ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>The archive ends with the MD5 of its header; the game refuses to start when they disagree.</summary>
+    public bool HeaderChecksumValid()
+    {
+        using var fs = open();
+        var trailer = new byte[16];
+        fs.Seek(-16, SeekOrigin.End);
+        fs.ReadExactly(trailer);
+        return System.Security.Cryptography.MD5.HashData(Header).AsSpan().SequenceEqual(trailer);
+    }
+
     public VbfEntry? Find(string name) => byName.GetValueOrDefault(name.Replace('\\', '/'));
 
     public int CompressedBlockLength(long blockIndex) =>

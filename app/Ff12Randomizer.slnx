@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="Ff12Randomizer.App/Ff12Randomizer.App.csproj" />
   <Project Path="Ff12Randomizer.Cli/Ff12Randomizer.Cli.csproj" />
   <Project Path="Ff12Randomizer.Core/Ff12Randomizer.Core.csproj" />
 </Solution>

@@ -8,6 +8,27 @@ if (args.Length == 0)
     return 1;
 }
 
+if (args[0] is "randomize" or "restore")
+{
+    // Full pipeline without the window: ff12rando randomize <seed> <toggle ids...> | restore
+    var game = Ff12Randomizer.Core.Game.GameInstall.FindSteamInstall() ?? throw new InvalidOperationException("Game not found.");
+    var paths = Ff12Randomizer.Core.Storage.AppPaths.Default;
+    var service = new Ff12Randomizer.Core.RandomizerService(game, paths);
+    if (args[0] == "restore")
+    {
+        Console.WriteLine(service.Patcher.Restore() ? "restored" : "nothing to restore");
+        return 0;
+    }
+    var settings = Ff12Randomizer.Core.Randomization.RandomizerSettings.Defaults();
+    foreach (string id in args.Skip(2)) settings.Toggles[id] = true;
+    var outcome = service.Run(settings, new Ff12Randomizer.Core.Randomization.Seed(args[1]), null,
+        new Progress<Ff12Randomizer.Core.RunStep>(s => Console.WriteLine($"  {s}")));
+    Console.WriteLine($"seed {outcome.Entry.Seed}: {outcome.Entry.FileCount} file(s), fingerprint {outcome.Entry.PatchedFingerprint}");
+    Console.WriteLine($"spoiler {outcome.Entry.SpoilerPath}");
+    Console.WriteLine($"status {service.Patcher.GetStatus()}");
+    return 0;
+}
+
 var vbf = new VbfArchive(Environment.GetEnvironmentVariable("FF12_VBF") ?? DefaultVbf);
 
 switch (args[0])

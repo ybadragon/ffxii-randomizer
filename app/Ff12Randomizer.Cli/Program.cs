@@ -400,6 +400,27 @@ switch (args[0])
             break;
         }
 
+    case "enemyext":
+        {
+            // enemyext <name>...: each named enemy's extended info record (0x54 bytes) in hex, once per distinct record.
+            var pack = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
+            var wanted = args.Skip(1).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var seen = new HashSet<string>();
+            foreach (var e in vbf.Entries.Where(e => Ff12Randomizer.Core.GameData.AreaData.IsAreaFile(e.Name)))
+            {
+                var area = new Ff12Randomizer.Core.GameData.AreaData(e.Name, vbf.Extract(e));
+                for (int r = 0; r < area.Basic.Count; r++)
+                {
+                    var basic = area.Basic[r].ToArray();
+                    string? name = pack.Text(Ff12Randomizer.Core.GameData.BattlePack.NamesTable, BinaryPrimitives.ReadUInt16LittleEndian(basic.AsSpan(8)) & 0xFFF);
+                    if (name is null || !wanted.Contains(name) || basic[0] >= area.Extended.Count) continue;
+                    string hex = Convert.ToHexString(area.Extended[basic[0]].ToArray());
+                    if (seen.Add(name + hex)) Console.WriteLine($"{name,-16} {area.AreaId}: {string.Join(" ", Enumerable.Range(0, hex.Length / 2).Select(i => hex.Substring(i * 2, 2)))}");
+                }
+            }
+            break;
+        }
+
     case "callscan":
         {
             // callscan <hexCallId>...: every "PUSHII n; CALL/CALLPOPA id" in the US map scripts, i.e. bytes

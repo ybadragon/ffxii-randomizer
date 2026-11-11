@@ -103,7 +103,7 @@ public static class OptionCatalog
             new("estats", "Enemy stats",
                 "How strong each kind of enemy is: HP, MP, Strength, Magick, Vitality, Speed, Evade, Defense, Magick Resist and Attack each change by their own amount, the same for that enemy everywhere. With Keep things sane, HP and MP stay within 80% to 125% and other stats within 85% to 120%; without, 50% to 200% and 60% to 160%. EXP, LP and gil don't change.",
                 false, [new("orig", "Original"), new("random", "Randomize")], [], Badge: "Untested", Implemented: true),
-            Toggle("elements", "Elemental affinities", "Enemy weaknesses, resistances, immunities and absorptions are re-rolled."),
+            Toggle("elements", "Elemental affinities", "Each kind of enemy gets its elements reshuffled: what it absorbs, shrugs off, takes half damage from, is weak to and powers up all move to other elements together, so an enemy keeps the shape of its affinities with new elements. With Keep things sane, Holy and Dark stay as they are, so undead stay weak to Holy.", badge: "Untested", implemented: true),
         ]),
         new("gear", "Gear", "Weapon and armor stats.",
         [

@@ -33,6 +33,7 @@ matched against known in-game values before use.
 | --- | --- | --- |
 | Shop stock | section 39 | node tree; located per map via script call `0x048D(2, list)` |
 | Consumable prices | section 18, u16 @0x0A | found from Potion 60 / Hi-Potion 180 / Ether 222 |
+| Magick / technick prices | sections 29 / 30, u16 @0x00 (record i = item 0x3000+i / 0x4000+i) | Cure 200, Vox 300, First Aid 600, Charge 1500 |
 | Equipment | section 13 (record i = item 0x1000+i) | price @0x12, weapon attack @0x1A, armor 0x18/0x19 |
 | Licenses | section 12 (type @0x05) | names: section 61 text table 3 |
 | Bazaar | section 57 | names: text table 9 |

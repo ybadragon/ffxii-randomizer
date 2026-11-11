@@ -440,6 +440,21 @@ switch (args[0])
             break;
         }
 
+    case "party":
+        {
+            var items = Ff12Randomizer.Core.GameData.ItemCatalog.Instance;
+            var pack = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
+            var party = pack.Table(Ff12Randomizer.Core.GameData.BattlePack.PartySection);
+            for (int i = 0; i < party.Count; i++)
+            {
+                var r = party.Record(i).ToArray();
+                var slots = Enumerable.Range(0, 10).Select(s => (Id: BinaryPrimitives.ReadUInt16LittleEndian(r.AsSpan(0x58 + s * 2)), Amount: r[0x34 + s]))
+                    .Where(s => s.Id != 0xFFFF).Select(s => $"{(items.Find(s.Id)?.Name ?? s.Id.ToString("X4"))} x{s.Amount}");
+                Console.WriteLine($"{i,2} name[i+1]={pack.Text(8, i + 1),-12} level {r[0x2E],2}: {string.Join(", ", slots)}");
+            }
+            break;
+        }
+
     case "callscan":
         {
             // callscan <hexCallId>...: every "PUSHII n; CALL/CALLPOPA id" in the US map scripts, i.e. bytes

@@ -26,6 +26,25 @@ public sealed class BattlePack(byte[] data)
 
     /// <summary>A table section's records, as writable slices of <see cref="Data"/>.</summary>
     public TableSection Table(int section) => new(Data, SectionOffset(section));
+
+    /// <summary>Section 61: the battle text tables (0 abilities, 1 equipment, 8 character and enemy names...).</summary>
+    public const int TextSection = 61, NamesTable = 8;
+
+    /// <summary>
+    /// String <paramref name="index"/> of text table <paramref name="table"/> in section 61: a u32 table count and u32 table
+    /// offsets, each table a u32 string count and u32 string offsets, relative to their own start; strings begin with two
+    /// bytes before the text.
+    /// </summary>
+    public string? Text(int table, int index)
+    {
+        int section = SectionOffset(TextSection);
+        if (table < 0 || table >= (int)BinaryPrimitives.ReadUInt32LittleEndian(Data.AsSpan(section))) return null;
+        int sub = section + (int)BinaryPrimitives.ReadUInt32LittleEndian(Data.AsSpan(section + 4 + table * 4));
+        if (index < 0 || index >= (int)BinaryPrimitives.ReadUInt32LittleEndian(Data.AsSpan(sub))) return null;
+        int start = sub + (int)BinaryPrimitives.ReadUInt32LittleEndian(Data.AsSpan(sub + 4 + index * 4)) + 2;
+        string text = start < Data.Length ? GameText.Decode(Data.AsSpan(start)) : "";
+        return text.Length == 0 ? null : text;
+    }
 }
 
 public readonly struct TableSection(byte[] data, int offset)

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 ﻿using Ff12Randomizer.Core.Vbf;
 
 const string DefaultVbf = @"C:\Program Files (x86)\Steam\steamapps\common\FINAL FANTASY XII THE ZODIAC AGE\FFXII_TZA.vbf";
@@ -351,6 +352,51 @@ switch (args[0])
                 else { differ++; Console.WriteLine($"  DIFFER {g.MapId}: csv '{g.Subarea}' vs game '{game}'"); }
             }
             Console.WriteLine($"{same} same, {differ} differ, {missing} without a game name");
+            break;
+        }
+
+    case "ards":
+        {
+            // ards <area prefix> [table]: dumps a table of each matching area file as u16 words, naming item ids.
+            var items = Ff12Randomizer.Core.GameData.ItemCatalog.Instance;
+            string table = args.Length > 2 ? args[2] : "stats";
+            var files = vbf.Entries.Where(e => Ff12Randomizer.Core.GameData.AreaData.IsAreaFile(e.Name)).ToList();
+            Console.WriteLine($"{files.Count} area files");
+            foreach (var e in files.Where(e => Path.GetFileName(e.Name).StartsWith(args[1])))
+            {
+                var area = new Ff12Randomizer.Core.GameData.AreaData(e.Name, vbf.Extract(e));
+                var t = table switch { "ext" => area.Extended, "basic" => area.Basic, "level" => area.LevelStats, _ => area.DefaultStats };
+                Console.WriteLine($"== {e.Name}: {t.Count} x 0x{t.RecordSize:X}");
+                for (int i = 0; i < Math.Min(t.Count, 12); i++)
+                {
+                    var r = t[i].ToArray();
+                    var words = Enumerable.Range(0, t.RecordSize / 2).Select(w => BinaryPrimitives.ReadUInt16LittleEndian(r.AsSpan(w * 2)))
+                        .Select(v => items.Find(v) is { } it && v != 0 ? $"{v:X4}={it.Name}" : $"{v:X4}");
+                    Console.WriteLine($"  [{i}] {string.Join(" ", words)}");
+                }
+            }
+            break;
+        }
+
+    case "buildcheck":
+        {
+            // Full pipeline into a temp file, never the game: buildcheck <seed> <options...>
+            var settings = Ff12Randomizer.Core.Randomization.RandomizerSettings.Defaults();
+            foreach (string id in args.Skip(2))
+            {
+                if (id.Split('=') is [var key, var value]) settings.Choices[key] = value; else settings.Toggles[id] = true;
+            }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var run = Ff12Randomizer.Core.Randomization.RandomizerEngine.Run(vbf, settings, new Ff12Randomizer.Core.Randomization.Seed(args[1]));
+            if (run.Problems.Count > 0) { Console.WriteLine($"PROBLEMS: {string.Join("; ", run.Problems.Take(5))}"); return 1; }
+            string temp = Path.Combine(Path.GetTempPath(), $"ff12rando-check-{Guid.NewGuid():N}.f12p");
+            try
+            {
+                var patch = VbfPatchBuilder.Build(vbf, run.Files, temp);
+                Ff12Randomizer.Core.Patching.PatchManager.Verify(vbf, run.Files, temp);
+                Console.WriteLine($"OK: {run.Files.Count} files, patch {new FileInfo(temp).Length / 1024} KB, header {patch.RealHeaderLength}->{patch.VirtualHeaderLength}, all files read back, {sw.ElapsedMilliseconds} ms");
+            }
+            finally { File.Delete(temp); }
             break;
         }
 

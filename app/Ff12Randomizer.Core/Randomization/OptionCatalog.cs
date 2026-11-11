@@ -88,12 +88,16 @@ public static class OptionCatalog
         ]),
         new("enemies", "Enemies", "Rewards, stats and weaknesses of the enemies you fight.",
         [
-            Toggle("rewards", "Enemy rewards", "What enemies give you.", subOptions:
-            [
-                new("drops", "Drops", "Normal and rare drops"),
-                new("steals", "Steals", "What Steal can take"),
-                new("poaches", "Poaches", "What Poach gets you"),
-            ]),
+            new("rewards", "Enemy rewards",
+                "What enemies give you. Shuffle moves the game's own rewards between enemies; Randomize picks new items. Every enemy of the same kind gets the same rewards, wherever it appears. With Keep things sane, loot stays loot and other items stay close in strength. Gil steals don't change.",
+                false, OrigShuffleRandom,
+                [
+                    new("drops", "Drops", "All four drop tiers, plus the Monograph and Canopic Jar bonus drops"),
+                    new("steals", "Steals", "What Steal can take"),
+                    new("poaches", "Poaches", "What Poach gets you"),
+                ],
+                Warning: "Randomize can leave a piece of loot that only one enemy carried unobtainable, which locks the bazaar items that need it. Shuffle keeps every item obtainable.",
+                Badge: "Untested", Implemented: true),
             Pick("estats", "Enemy stats", "How strong individual enemies are.", null, OrigShuffleRandom),
             Toggle("elements", "Elemental affinities", "Enemy weaknesses, resistances, immunities and absorptions are re-rolled."),
         ]),

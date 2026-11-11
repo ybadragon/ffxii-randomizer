@@ -102,7 +102,7 @@ public sealed class PatchManager(GameInstall game, Func<bool>? isGameRunning = n
     }
 
     /// <summary>Reads every changed file back through the same logic the loader uses, plus the header checksum.</summary>
-    private static void Verify(VbfArchive original, IReadOnlyDictionary<string, byte[]> files, string patchPath)
+    public static void Verify(VbfArchive original, IReadOnlyDictionary<string, byte[]> files, string patchPath)
     {
         var patched = new VbfArchive(original.Path, () => new VirtualVbfStream(original.Path, patchPath));
         if (!patched.HeaderChecksumValid()) throw new InvalidDataException("Header checksum mismatch in the new patch.");

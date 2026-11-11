@@ -28,7 +28,6 @@ public static class ShopLocations
     public static IReadOnlyDictionary<int, IReadOnlyList<ShopPlace>> Find(VbfArchive archive)
     {
         var names = new MapNames(archive);
-        var regions = RegionByPrefix(names.Places);
 
         var result = new Dictionary<int, List<ShopPlace>>();
         foreach (var entry in archive.Entries.Where(e => e.Name.StartsWith(MapScripts) && e.Name.EndsWith(".ebp")))
@@ -37,7 +36,7 @@ public static class ShopLocations
             var lists = ListsOpenedBy(archive.Extract(entry));
             if (lists.Count == 0) continue;
 
-            var shopPlace = new ShopPlace(mapId, regions.GetValueOrDefault(mapId[..3]), names.NameOf(mapId));
+            var shopPlace = new ShopPlace(mapId, names.RegionOf(mapId), names.NameOf(mapId));
             foreach (int list in lists)
             {
                 if (!result.TryGetValue(list, out var where)) result[list] = where = new();
@@ -60,17 +59,4 @@ public static class ShopLocations
         return lists;
     }
 
-    /// <summary>
-    /// The region of each map prefix ("ald" → Old Archades), from the areas the treasure data gives that prefix's maps,
-    /// kept only when it is one of the game's own region names.
-    /// </summary>
-    private static Dictionary<string, string> RegionByPrefix(PlaceNames places)
-    {
-        var gameRegions = Enumerable.Range(0, places.MainCount).Select(places.Main).OfType<string>().ToHashSet();
-        return TreasureData.Groups
-            .GroupBy(g => g.MapId[..3])
-            .Select(g => (Prefix: g.Key, Area: g.GroupBy(x => x.Area).OrderByDescending(a => a.Count()).First().Key))
-            .Where(x => gameRegions.Contains(x.Area))
-            .ToDictionary(x => x.Prefix, x => x.Area);
-    }
 }

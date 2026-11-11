@@ -14,6 +14,10 @@ public sealed class RandomizerSettings
         var settings = new RandomizerSettings();
         settings.Toggles["sane"] = true;
         settings.Toggles["spoiler"] = true;
+        // Enemy rewards only change what its ticked kinds cover, so they start ticked.
+        settings.Toggles["drops"] = true;
+        settings.Toggles["steals"] = true;
+        settings.Toggles["poaches"] = true;
         return settings;
     }
 

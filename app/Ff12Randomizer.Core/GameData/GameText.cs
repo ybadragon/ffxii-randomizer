@@ -36,6 +36,28 @@ public sealed class MapNames(PlaceNames places)
 
     public string? NameOf(string mapId) => Numbers.TryGetValue(mapId, out int number) ? Places.Sub(number) : null;
 
+    private Dictionary<string, string>? _regions;
+
+    /// <summary>
+    /// The region of a map or area id by its 3-letter prefix ("ald_a02" → Old Archades): the area the treasure data gives
+    /// that prefix's maps, kept only when it is one of the game's own region names.
+    /// </summary>
+    public string? RegionOf(string mapOrAreaId)
+    {
+        _regions ??= BuildRegions();
+        return mapOrAreaId.Length >= 3 ? _regions.GetValueOrDefault(mapOrAreaId[..3]) : null;
+    }
+
+    private Dictionary<string, string> BuildRegions()
+    {
+        var gameRegions = Enumerable.Range(0, Places.MainCount).Select(Places.Main).OfType<string>().ToHashSet();
+        return TreasureData.Groups
+            .GroupBy(g => g.MapId[..3])
+            .Select(g => (Prefix: g.Key, Area: g.GroupBy(x => x.Area).OrderByDescending(a => a.Count()).First().Key))
+            .Where(x => gameRegions.Contains(x.Area))
+            .ToDictionary(x => x.Prefix, x => x.Area);
+    }
+
     /// <summary>
     /// The game's name for a map, keeping a description's extra detail when it extends that name
     /// ("No. 11 Channel (water is drained)" for one of two maps the game calls "No. 11 Channel").

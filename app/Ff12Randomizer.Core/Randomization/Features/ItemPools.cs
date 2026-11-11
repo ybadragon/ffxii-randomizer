@@ -16,11 +16,13 @@ internal static class ItemPools
         !sane ? 0 : item.Category == ItemCategory.Loot ? -1 : Band(item.Rank);
 
     /// <summary>A replacement for <paramref name="original"/>: loot for loot and similar rank for the rest when sane.</summary>
-    public static ItemInfo PickLike(Rng rng, IReadOnlyList<ItemInfo> pool, ItemInfo original, bool sane, int rankBonus = 0)
+    public static ItemInfo PickLike(Rng rng, IReadOnlyList<ItemInfo> pool, ItemInfo original, bool sane, int rankBonus = 0,
+        Func<ItemInfo, bool>? allowed = null)
     {
+        bool Also(ItemInfo i) => allowed?.Invoke(i) ?? true;
         if (sane && original.Category == ItemCategory.Loot)
-            return PickNear(rng, pool, 0, sane: false, allowed: i => i.Category == ItemCategory.Loot);
-        return PickNear(rng, pool, original.Rank + rankBonus, sane, allowed: sane ? i => i.Category != ItemCategory.Loot : null);
+            return PickNear(rng, pool, 0, sane: false, allowed: i => i.Category == ItemCategory.Loot && Also(i));
+        return PickNear(rng, pool, original.Rank + rankBonus, sane, allowed: sane ? i => i.Category != ItemCategory.Loot && Also(i) : Also);
     }
 
     /// <summary>Items that may be handed out by a randomizer at all.</summary>

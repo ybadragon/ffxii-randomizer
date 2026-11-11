@@ -8,6 +8,7 @@ it ships its own small `dinput8.dll` loader, and the 31 GB game archive is never
 
 | Option | Works on existing saves | Confirmed in game |
 | --- | --- | --- |
+| Open world (Bartz24's base, experimental) | new game | boots to the title screen; play untested |
 | Treasure chests (shuffle/randomize, gil amounts) | yes, unopened chests | yes |
 | Shops (shuffle/randomize) | yes | yes |
 | Shop prices (consumables, equipment) | yes | not yet |

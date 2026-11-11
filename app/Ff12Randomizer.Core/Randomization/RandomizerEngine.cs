@@ -9,7 +9,8 @@ public sealed record RunResult(
     RandomizerSettings Settings,
     IReadOnlyDictionary<string, byte[]> Files,
     JsonObject Spoiler,
-    IReadOnlyList<string> Problems);
+    IReadOnlyList<string> Problems,
+    IReadOnlyCollection<string>? LoaderFeatures = null);
 
 public sealed class ValidationFailedException(IReadOnlyList<string> problems)
     : Exception($"The randomizer produced something that failed its checks, so nothing was written to the game. First problem: {problems[0]}")
@@ -22,6 +23,9 @@ public static class RandomizerEngine
     /// <summary>Features in the order they run. Order is part of what a seed reproduces, so only ever append.</summary>
     public static IReadOnlyList<IRandomizerFeature> Features { get; } =
     [
+        // First: the open world replaces whole files that the other features then edit. It uses no random numbers, so
+        // running it first doesn't change what any seed produces without it.
+        new OpenWorldFeature(),
         new StartingPotionsFeature(),
         new TreasureFeature(),
         new ShopsFeature(),
@@ -49,6 +53,6 @@ public static class RandomizerEngine
             else if (Math.Max(1, (bytes.Length + VbfArchive.BlockSize - 1L) / VbfArchive.BlockSize) > Math.Max(1, entry.BlockCount))
                 problems.Add($"{name} grew past its original size limit ({entry.BlockCount} × 64 KB).");
         }
-        return new RunResult(seed, settings.Clone(), context.ChangedFiles, context.Spoiler, problems);
+        return new RunResult(seed, settings.Clone(), context.ChangedFiles, context.Spoiler, problems, context.LoaderFeatures.ToList());
     }
 }

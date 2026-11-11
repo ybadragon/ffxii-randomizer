@@ -515,6 +515,135 @@ bool Hook(const char* module, const char* function, T replacement, T& original)
     return previous != nullptr;
 }
 
+// ---- Hunt rewards code patch ----------------------------------------------------------------------
+// Native port of RandoHuntRewards.lua from Bartz24's FFModdingWPF (MIT). The open world hands out Espers and the Second
+// Board (ids 0xC000-0xC01F) as event and hunt rewards; the game's reward window can't look those up, so this detours the
+// lookup: for those ids it fetches the Esper record (type 0x11), sets the crystal icon (43) and, for the Second Board,
+// fills in a missing name. Addresses are the Lua script's, which assume the executable's preferred base 0x120000.
+
+constexpr uintptr_t PreferredBase = 0x120000;
+constexpr uintptr_t PatchSite = 0x3F4203, PatchReturn = 0x3F421E;
+constexpr uintptr_t FnGetRecord = 0x35D380, FnVanillaA = 0x2FABD0, FnVanillaB = 0x3933B0;
+constexpr uint8_t PatchOriginal[] = {
+    0x0F, 0xB7, 0xCB, 0xE8, 0xC5, 0x69, 0xF0, 0xFF, 0x8B, 0xC8, 0x0F, 0xB7, 0xDB, 0xE8,
+    0x9B, 0xF1, 0xF9, 0xFF, 0x8B, 0xC8, 0x8B, 0xD3, 0xE8, 0x62, 0x91, 0xF6, 0xFF};
+
+uint8_t* GameAddress(uintptr_t luaAddress)
+{
+    return reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr)) + (luaAddress - PreferredBase);
+}
+
+// Executable memory within +-2 GB of the game, so rel32 jumps and calls reach it.
+uint8_t* AllocateNear(uint8_t* target, size_t size)
+{
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    uintptr_t granularity = info.dwAllocationGranularity;
+    uintptr_t start = reinterpret_cast<uintptr_t>(target) & ~(granularity - 1);
+    for (uintptr_t step = granularity; step < 0x7FF00000; step += granularity)
+    {
+        for (uintptr_t candidate : {start + step, start > step ? start - step : 0})
+        {
+            if (candidate == 0) continue;
+            void* memory = VirtualAlloc(reinterpret_cast<void*>(candidate), size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+            if (memory) return static_cast<uint8_t*>(memory);
+        }
+    }
+    return nullptr;
+}
+
+struct CodeWriter
+{
+    std::vector<uint8_t> bytes;
+    void Put(std::initializer_list<uint8_t> b) { bytes.insert(bytes.end(), b); }
+    void Put32(uint32_t v) { for (int i = 0; i < 4; i++) bytes.push_back(static_cast<uint8_t>(v >> (i * 8))); }
+    void Put64(uint64_t v) { for (int i = 0; i < 8; i++) bytes.push_back(static_cast<uint8_t>(v >> (i * 8))); }
+    // call/jmp rel32 to an absolute target, given where this code will live.
+    void Rel32(uint8_t opcode, uint8_t* base, uint8_t* target)
+    {
+        bytes.push_back(opcode);
+        int64_t rel = target - (base + bytes.size() + 4);
+        Put32(static_cast<uint32_t>(static_cast<int32_t>(rel)));
+    }
+    size_t Here() const { return bytes.size(); }
+    // Short jump placeholder; returns the index of the displacement byte.
+    size_t Jcc8(uint8_t opcode) { bytes.push_back(opcode); bytes.push_back(0); return bytes.size() - 1; }
+    void Bind(size_t displacementIndex) { bytes[displacementIndex] = static_cast<uint8_t>(bytes.size() - (displacementIndex + 1)); }
+};
+
+bool ApplyHuntRewardsPatch()
+{
+    uint8_t* site = GameAddress(PatchSite);
+    if (memcmp(site, PatchOriginal, sizeof(PatchOriginal)) != 0)
+    {
+        Log("hunt rewards patch: unexpected code at the patch site (different game version?), not applied");
+        return false;
+    }
+    uint8_t* cave = AllocateNear(site, 4096);
+    if (!cave)
+    {
+        Log("hunt rewards patch: no memory near the game, not applied");
+        return false;
+    }
+
+    // "Second Board" in the game's text encoding (A=0x20, a=0x3A, space=0x04), NUL terminated, after the code.
+    const uint8_t boardName[] = {0x32, 0x3E, 0x3C, 0x48, 0x47, 0x3D, 0x04, 0x21, 0x48, 0x3A, 0x4B, 0x3D, 0x00};
+    uint8_t* name = cave + 2048;
+    memcpy(name, boardName, sizeof(boardName));
+
+    CodeWriter c;
+    c.Put({0x0F, 0xB7, 0xCB});                            // movzx ecx,bx
+    c.Put({0x81, 0xF9}); c.Put32(0xC000);                 // cmp ecx,0xC000
+    size_t toVanilla1 = c.Jcc8(0x72);                     // jb vanilla
+    c.Put({0x81, 0xF9}); c.Put32(0xC01F);                 // cmp ecx,0xC01F
+    size_t toVanilla2 = c.Jcc8(0x77);                     // ja vanilla
+    c.Put({0x0F, 0xB7, 0xDB});                            // movzx ebx,bx
+    c.Put({0xB9}); c.Put32(0x11);                         // mov ecx,0x11 (Esper record type)
+    c.Put({0x89, 0xDA});                                  // mov edx,ebx
+    c.Rel32(0xE8, cave, GameAddress(FnGetRecord));        // call get record
+    c.Put({0xC7, 0x40, 0x2C}); c.Put32(43);               // mov dword [rax+0x2C],43 (crystal icon)
+    c.Put({0x81, 0xFB}); c.Put32(0xC01F);                 // cmp ebx,0xC01F (Second Board)
+    size_t toReturn1 = c.Jcc8(0x75);                      // jne return
+    c.Put({0x48, 0x8B, 0x48, 0x18});                      // mov rcx,[rax+0x18]
+    c.Put({0x48, 0x85, 0xC9});                            // test rcx,rcx
+    size_t toBoardName = c.Jcc8(0x74);                    // je board_name
+    c.Put({0x80, 0x39, 0x00});                            // cmp byte [rcx],0
+    size_t toReturn2 = c.Jcc8(0x75);                      // jne return
+    c.Bind(toBoardName);
+    c.Put({0x48, 0xB9}); c.Put64(reinterpret_cast<uint64_t>(name)); // mov rcx,name
+    c.Put({0x48, 0x89, 0x48, 0x18});                      // mov [rax+0x18],rcx
+    size_t toReturn3 = c.Jcc8(0xEB);                      // jmp return
+    c.Bind(toVanilla1);
+    c.Bind(toVanilla2);
+    c.Rel32(0xE8, cave, GameAddress(FnVanillaA));         // the original code: call A
+    c.Put({0x8B, 0xC8});                                  // mov ecx,eax
+    c.Put({0x0F, 0xB7, 0xDB});                            // movzx ebx,bx
+    c.Rel32(0xE8, cave, GameAddress(FnVanillaB));         // call B
+    c.Put({0x8B, 0xC8});                                  // mov ecx,eax
+    c.Put({0x8B, 0xD3});                                  // mov edx,ebx
+    c.Rel32(0xE8, cave, GameAddress(FnGetRecord));        // call get record
+    c.Bind(toReturn1);
+    c.Bind(toReturn2);
+    c.Bind(toReturn3);
+    c.Rel32(0xE9, cave, GameAddress(PatchReturn));        // jmp back after the patched block
+    memcpy(cave, c.bytes.data(), c.bytes.size());
+
+    // Detour: jmp cave, then NOPs over the rest of the 27 replaced bytes.
+    DWORD old;
+    VirtualProtect(site, sizeof(PatchOriginal), PAGE_EXECUTE_READWRITE, &old);
+    uint8_t detour[sizeof(PatchOriginal)];
+    memset(detour, 0x90, sizeof(detour));
+    detour[0] = 0xE9;
+    int32_t rel = static_cast<int32_t>(cave - (site + 5));
+    memcpy(detour + 1, &rel, 4);
+    memcpy(site, detour, sizeof(detour));
+    VirtualProtect(site, sizeof(PatchOriginal), old, &old);
+    FlushInstructionCache(GetCurrentProcess(), site, sizeof(PatchOriginal));
+    FlushInstructionCache(GetCurrentProcess(), cave, c.bytes.size());
+    Log("hunt rewards patch applied (%zu bytes of code)", c.bytes.size());
+    return true;
+}
+
 void Initialize(HMODULE self)
 {
     wchar_t path[MAX_PATH];
@@ -533,6 +662,10 @@ void Initialize(HMODULE self)
     logFile = _wfsopen((randoDir + L"\\loader.log").c_str(), L"w", _SH_DENYNO);
     verbose = GetFileAttributesW((randoDir + L"\\verbose.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
     Log("ff12rando loader starting%s", verbose ? " (verbose)" : "");
+    if (GetFileAttributesW((randoDir + L"\\hunt_rewards.on").c_str()) != INVALID_FILE_ATTRIBUTES)
+    {
+        ApplyHuntRewardsPatch();
+    }
     LoadPatch();
     if (!patchLoaded)
     {

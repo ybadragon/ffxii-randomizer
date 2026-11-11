@@ -569,6 +569,23 @@ switch (args[0])
             break;
         }
 
+    case "sectiondiff":
+        {
+            // sectiondiff <zip>: compares the zip's battle_pack.bin.dir pieces with the vanilla sections.
+            var bp = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
+            var s61 = bp.Section(61);
+            using var zip = System.IO.Compression.ZipFile.OpenRead(args[1]);
+            foreach (var e in zip.Entries.Where(e => e.FullName.Contains("battle_pack.bin.dir/")).OrderBy(e => e.FullName))
+            {
+                using var ms = new MemoryStream(); using (var st = e.Open()) st.CopyTo(ms); var edited = ms.ToArray();
+                var m = System.Text.RegularExpressions.Regex.Matches(e.FullName, @"section_(\d+)\.bin").Select(x => int.Parse(x.Groups[1].Value)).ToList();
+                byte[] vanilla = m.Count == 2 ? new Ff12Randomizer.Core.GameData.BattlePack(s61).Section(m[1]) : bp.Section(m[0]);
+                int diff = 0; for (int i = 0; i < Math.Min(edited.Length, vanilla.Length); i++) if (edited[i] != vanilla[i]) diff++;
+                Console.WriteLine($"{string.Join("/", m),-6} vanilla {vanilla.Length,6} edited {edited.Length,6} differing bytes {diff}");
+            }
+            break;
+        }
+
     case "callscan":
         {
             // callscan <hexCallId>...: every "PUSHII n; CALL/CALLPOPA id" in the US map scripts, i.e. bytes

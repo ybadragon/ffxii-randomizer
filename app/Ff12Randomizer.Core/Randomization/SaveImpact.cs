@@ -26,6 +26,7 @@ public static class SaveImpacts
 {
     private static readonly Dictionary<string, SaveImpactInfo> ByGroup = new()
     {
+        ["openworld"] = new(SaveImpact.NewGameOnly, "The story's scripts change from the very start, so begin a new game."),
         ["potions"] = new(SaveImpact.NewGameOnly, "Starting items are given when you start a new game."),
         ["pstats"] = new(SaveImpact.NewGameOnly, "Party stats are copied into your save when a character joins."),
         ["startinv"] = new(SaveImpact.NewGameOnly, "Starting gear and items are given when a character joins."),

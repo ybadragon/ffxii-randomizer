@@ -17,6 +17,8 @@ it ships its own small `dinput8.dll` loader, and the 31 GB game archive is never
 | Elemental affinities | yes | not yet |
 | Weapon and armor stats | yes | not yet |
 | License boards, Espers, Quickenings | new game | not yet |
+| Starting equipment and items | new game | not yet |
+| Party stats (shuffle between the six) | new game | not yet |
 | Vaan starts with 99 Potions (test mod) | new game | yes |
 
 Untested options carry an "Untested" badge in the app until confirmed.
@@ -33,7 +35,8 @@ matched against known in-game values before use.
 | Equipment | section 13 (record i = item 0x1000+i) | price @0x12, weapon attack @0x1A, armor 0x18/0x19 |
 | Licenses | section 12 (type @0x05) | names: section 61 text table 3 |
 | Bazaar | section 57 | names: text table 9 |
-| Party starting data | section 16 | items @0x58, amounts @0x34 |
+| Party starting data | section 16 | gear @0x0A (5 ids), char index @0x14, stats 0x16-0x2B, items @0x58, amounts @0x34, name id @0x30 (text table 8) |
+| Character names (menus) | `menu_command_template.bin` (st2e) ids 180072+ | Vaan, Balthier, Fran, Basch, Ashe, Penelo, guests |
 | Enemy names | section 61 text table 8 | index = NameID & 0xFFF |
 | Treasure | `plan_master/us/plan_map/<area>/<map>/global/<map>.ebp` | 0x18-byte chest records |
 | Enemy rewards / stats / elements | `plan_master/in/plan_map/<area>/area/<area>.ard` | basic info drops 0x28, steals 0x32, poaches 0x44; stats 0x20-0x2D; element masks 0x29-0x2D |

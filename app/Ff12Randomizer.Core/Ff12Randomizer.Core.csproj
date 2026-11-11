@@ -19,6 +19,8 @@
     <EmbeddedResource Include="$(LoaderDll)" LogicalName="dinput8.dll" />
     <!-- Data tables from Bartz24/FFModdingWPF (MIT, see third_party/FFModdingWPF). -->
     <EmbeddedResource Include="Data\*.csv" LogicalName="data/%(Filename)%(Extension)" />
+    <!-- Open world base files from Bartz24/FFModdingWPF (MIT, see third_party/FFModdingWPF/openworld). -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\third_party\FFModdingWPF\openworld\openworld.zip" LogicalName="openworld.zip" />
   </ItemGroup>
 
   <ItemGroup>

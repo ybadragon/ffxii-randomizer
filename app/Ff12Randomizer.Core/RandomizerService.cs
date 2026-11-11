@@ -33,7 +33,7 @@ public sealed class RandomizerService(GameInstall game, AppPaths paths)
             throw new InvalidOperationException("None of the selected options change the game yet. Turn on an option that's available.");
 
         progress?.Report(RunStep.WritingAndChecking);
-        string fingerprint = Patcher.Apply(original, result.Files);
+        string fingerprint = Patcher.Apply(original, result.Files, result.LoaderFeatures);
 
         progress?.Report(RunStep.Saving);
         var entry = new HistoryEntry

@@ -58,6 +58,13 @@ public static class OptionCatalog
 
     public static IReadOnlyList<OptionTab> Tabs { get; } =
     [
+        new("world", "World", "How the story and the world are opened up.",
+        [
+            Toggle("openworld", "Open world",
+                "Based on Bartz24's FF12 Open World Randomizer: the story no longer walls areas off. Key items like the aeropasses, the Writ of Transit and the story's nethicite open the way instead, and story events and hunts hand them out. Uses that randomizer's default key item layout; where each one is is listed in the spoiler log under openWorldRewards. Combine it freely with the other options.",
+                badge: "Experimental", implemented: true,
+                warning: "Experimental and untested: start a new game, and keep a save outside the randomized game you can go back to. Story scenes are skipped or changed, so expect rough edges. Thanks to Bartz24 for the open world (MIT licensed)."),
+        ]),
         new("party", "Party", "Starting stats, items and equipment for your party.",
         [
             Toggle("potions", "Vaan starts with 99 Potions",

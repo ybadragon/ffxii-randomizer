@@ -57,7 +57,7 @@ public sealed class PatchManager(GameInstall game, Func<bool>? isGameRunning = n
     }
 
     /// <summary>Writes <paramref name="files"/> as the new patch, checks every file reads back exactly, and installs the loader.</summary>
-    public string Apply(VbfArchive original, IReadOnlyDictionary<string, byte[]> files)
+    public string Apply(VbfArchive original, IReadOnlyDictionary<string, byte[]> files, IReadOnlyCollection<string>? loaderFeatures = null)
     {
         if (_isGameRunning()) throw new GameRunningException();
         if (GetStatus() == GameDataStatus.OtherLoader) throw new OtherLoaderException(Game.LoaderPath);
@@ -70,6 +70,7 @@ public sealed class PatchManager(GameInstall game, Func<bool>? isGameRunning = n
             Verify(original, files, staging);
             File.Move(staging, Game.PatchPath, overwrite: true);
             InstallLoader();
+            WriteLoaderFeatures(loaderFeatures ?? []);
         }
         catch (Exception e) when (e is not GameRunningException)
         {
@@ -91,6 +92,16 @@ public sealed class PatchManager(GameInstall game, Func<bool>? isGameRunning = n
         if (hasLoader) File.Delete(Game.LoaderPath);
         if (hasFolder) Directory.Delete(Game.RandoDirectory, recursive: true);
         return true;
+    }
+
+    /// <summary>One empty "&lt;name&gt;.on" file per loader feature; stale ones from an earlier run are removed.</summary>
+    private void WriteLoaderFeatures(IReadOnlyCollection<string> features)
+    {
+        foreach (string stale in Directory.GetFiles(Game.RandoDirectory, "*.on"))
+        {
+            if (!features.Contains(Path.GetFileNameWithoutExtension(stale))) File.Delete(stale);
+        }
+        foreach (string feature in features) File.WriteAllBytes(Path.Combine(Game.RandoDirectory, feature + ".on"), []);
     }
 
     private void InstallLoader()

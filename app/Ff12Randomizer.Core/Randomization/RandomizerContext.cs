@@ -22,6 +22,9 @@ public sealed class RandomizerContext(VbfArchive original, RandomizerSettings se
 
     public IReadOnlyDictionary<string, byte[]> ChangedFiles => _changed;
 
+    /// <summary>Extra behaviour the loader DLL should switch on, each written as an empty NAME.on file in the ff12rando folder (e.g. hunt_rewards.on).</summary>
+    public ISet<string> LoaderFeatures { get; } = new SortedSet<string>(StringComparer.Ordinal);
+
     /// <summary>Structured spoiler data by section ("party", "treasure", ...); each section is a list of entries.</summary>
     public JsonObject Spoiler { get; } = new();
 

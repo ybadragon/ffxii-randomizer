@@ -16,9 +16,23 @@ public sealed class ShopTable
     public const int Section = 39;
     private const uint RootTag = 0x64, ShopTag = 0x164, ListTag = 0x264;
 
+    /// <summary>
+    /// Shop names confirmed in game where data/shops.csv disagrees. The CSV id is the shop's position in the table, which
+    /// holds for the shops checked so far, but a few lesser-visited ones are labelled wrong.
+    /// </summary>
+    private static readonly Dictionary<int, (string Name, string Location)> Verified = new()
+    {
+        // 2026-11-10: this stock list (Bacchus's Wine, Remedy, ... over 9 stages) is what the Stranded Merchant in
+        // Old Archades (Alley of Low Whispers) sells; the CSV calls it Tetran on the Dreadnought Leviathan.
+        [25] = ("Stranded Merchant", "Old Archades"),
+    };
+
     public static IReadOnlyList<ShopInfo> Known { get; } = Csv.ReadEmbedded("shops.csv").Skip(1)
         .Where(r => r.Count >= 4 && int.TryParse(r[1], out _))
         .Select(r => new ShopInfo(r[0], int.Parse(r[1]), r[2], r[3].Split('|', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal)))
+        .Select(s => Verified.TryGetValue(s.Id, out var v) ? s with { Name = v.Name, Location = v.Location }
+            // The CSV's other "Stranded Merchant" row (36: a Teleport Stone and Spoiled Gysahl Greens) is unconfirmed.
+            : s.Id == 36 ? s with { Name = "Unidentified shop (Teleport Stone)", Location = "" } : s)
         .ToList();
 
     private readonly byte[] _data;
@@ -34,6 +48,7 @@ public sealed class ShopTable
         var shops = new List<ShopStock>();
         for (int i = 0; i < shopCount; i++)
         {
+            uint rootId = U32(rootStart + i * 8);
             int shopNode = (int)U32(rootStart + i * 8 + 4);
             if (U32(shopNode) != ShopTag) throw new InvalidDataException($"Shop {i} has an unexpected node tag.");
             int listCount = U16(shopNode + 0x6), listStart = (int)U32(shopNode + 0x8);
@@ -44,7 +59,7 @@ public sealed class ShopTable
                 if (U32(listNode) != ListTag) throw new InvalidDataException($"Shop {i} list {j} has an unexpected node tag.");
                 lists.Add(new StockList(this, _base + (int)U32(listNode + 0x8), U16(listNode + 0x6)));
             }
-            shops.Add(new ShopStock(i, Known.FirstOrDefault(s => s.Id == i), lists));
+            shops.Add(new ShopStock(i, rootId, Known.FirstOrDefault(s => s.Id == i), lists));
         }
         Shops = shops;
     }
@@ -54,7 +69,7 @@ public sealed class ShopTable
     private uint U32(int offset) => BinaryPrimitives.ReadUInt32LittleEndian(_data.AsSpan(_base + offset));
     private ushort U16(int offset) => BinaryPrimitives.ReadUInt16LittleEndian(_data.AsSpan(_base + offset));
 
-    public sealed record ShopStock(int Index, ShopInfo? Info, IReadOnlyList<StockList> Lists)
+    public sealed record ShopStock(int Index, uint RootId, ShopInfo? Info, IReadOnlyList<StockList> Lists)
     {
         public string Name => Info?.Name ?? $"Shop {Index}";
     }

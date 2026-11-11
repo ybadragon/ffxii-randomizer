@@ -73,7 +73,7 @@ public sealed class ShopsFeature : IRandomizerFeature
                 was = slots.Where(s => s.Shop == shop && s.Stage == stage).Select(s => s.Original.Name).ToArray(),
             }).Where(s => s.was.Length > 0).ToList();
             if (stages.Count == 0) continue;
-            context.Spoil("shops", new { shop = shop.Name, location = shop.Info?.Location, stages });
+            context.Spoil("shops", new { shop = shop.Name, location = shop.Info?.Location, index = shop.Index, stages });
         }
     }
 

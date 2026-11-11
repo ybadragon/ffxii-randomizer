@@ -254,7 +254,7 @@ switch (args[0])
             int unknown = 0;
             foreach (var shop in table.Shops)
             {
-                Console.WriteLine($"[{shop.Index}] {shop.Name} ({shop.Info?.Location}) {shop.Lists.Count} stages");
+                Console.WriteLine($"[{shop.Index}] root {shop.RootId} (0x{shop.RootId:X}) {shop.Lists.Count} stages, first: {string.Join(", ", shop.Lists.SelectMany(l => l.Items).Take(4).Select(items.NameOf))}");
                 foreach (var (list, n) in shop.Lists.Select((l, n) => (l, n)))
                 {
                     unknown += list.Items.Count(i => i != 0xFFFF && items.Find(i) is null);
@@ -284,6 +284,28 @@ switch (args[0])
                 Console.WriteLine($"[{section}] {list.Count} entries");
                 foreach (var item in list.Take(args.Contains("-v") ? 1000 : 3)) Console.WriteLine($"  {item!.ToJsonString()}");
             }
+            break;
+        }
+
+    case "findstock":
+        {
+            // findstock <spoiler.json> <item>,<item>,... : which shop lists (original or randomized) hold these items
+            var items = Ff12Randomizer.Core.GameData.ItemCatalog.Instance;
+            var wanted = args[2].Split(',').Select(s => s.Trim()).ToList();
+            int Score(IEnumerable<string> names) => wanted.Count(w => names.Any(n => n.StartsWith(w, StringComparison.OrdinalIgnoreCase)));
+
+            var pack = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
+            var table = new Ff12Randomizer.Core.GameData.ShopTable(pack);
+            Console.WriteLine("Original stock, best matches:");
+            foreach (var hit in table.Shops.SelectMany(s => s.Lists.Select((l, n) => (s, n, names: l.Items.Select(items.NameOf).ToList())))
+                         .OrderByDescending(h => Score(h.names)).Take(4))
+                Console.WriteLine($"  {Score(hit.names)}/{wanted.Count} [{hit.s.Index}] {hit.s.Name} stage {hit.n}: {string.Join(", ", hit.names)}");
+
+            var spoiler = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(args[1]))!;
+            Console.WriteLine("Randomized stock (spoiler 'now'), best matches:");
+            foreach (var hit in spoiler["shops"]!.AsArray().SelectMany(s => s!["stages"]!.AsArray().Select(st => (shop: (string)s["shop"]!, stage: (int)st!["stage"]!,
+                         names: st["now"]!.AsArray().Select(x => (string)x!).ToList()))).OrderByDescending(h => Score(h.names)).Take(4))
+                Console.WriteLine($"  {Score(hit.names)}/{wanted.Count} {hit.shop} stage {hit.stage}: {string.Join(", ", hit.names)}");
             break;
         }
 

@@ -17,22 +17,13 @@ public sealed class ShopTable
     private const uint RootTag = 0x64, ShopTag = 0x164, ListTag = 0x264;
 
     /// <summary>
-    /// Shop names confirmed in game where data/shops.csv disagrees. The CSV id is the shop's position in the table, which
-    /// holds for the shops checked so far, but a few lesser-visited ones are labelled wrong.
+    /// Shop names from data/shops.csv, keyed by stock list (the position in this table). Which list an NPC opens is decided
+    /// by the map scripts, and one list can serve several NPCs (the Stranded Merchant in Old Archades was seen selling
+    /// list 25, which the CSV names after Tetran), so these names say where a list is known from, not every NPC using it.
     /// </summary>
-    private static readonly Dictionary<int, (string Name, string Location)> Verified = new()
-    {
-        // 2026-11-10: this stock list (Bacchus's Wine, Remedy, ... over 9 stages) is what the Stranded Merchant in
-        // Old Archades (Alley of Low Whispers) sells; the CSV calls it Tetran on the Dreadnought Leviathan.
-        [25] = ("Stranded Merchant", "Old Archades"),
-    };
-
     public static IReadOnlyList<ShopInfo> Known { get; } = Csv.ReadEmbedded("shops.csv").Skip(1)
         .Where(r => r.Count >= 4 && int.TryParse(r[1], out _))
         .Select(r => new ShopInfo(r[0], int.Parse(r[1]), r[2], r[3].Split('|', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal)))
-        .Select(s => Verified.TryGetValue(s.Id, out var v) ? s with { Name = v.Name, Location = v.Location }
-            // The CSV's other "Stranded Merchant" row (36: a Teleport Stone and Spoiled Gysahl Greens) is unconfirmed.
-            : s.Id == 36 ? s with { Name = "Unidentified shop (Teleport Stone)", Location = "" } : s)
         .ToList();
 
     private readonly byte[] _data;
@@ -71,7 +62,9 @@ public sealed class ShopTable
 
     public sealed record ShopStock(int Index, uint RootId, ShopInfo? Info, IReadOnlyList<StockList> Lists)
     {
-        public string Name => Info?.Name ?? $"Shop {Index}";
+        /// <summary>"Stock list 25 (listed as Tetran, Dreadnought Leviathan)": the list number is exact, the name is a hint.</summary>
+        public string Name => Info is null ? $"Stock list {Index}"
+            : $"Stock list {Index} (listed as {Info.Name}{(Info.Location.Length > 0 ? $", {Info.Location}" : "")})";
     }
 
     /// <summary>One stage of a shop's stock. Entries of 0xFFFF are empty.</summary>

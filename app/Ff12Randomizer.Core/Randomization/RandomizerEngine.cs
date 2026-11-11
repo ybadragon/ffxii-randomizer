@@ -26,6 +26,7 @@ public static class RandomizerEngine
         new TreasureFeature(),
         new ShopsFeature(),
         new EnemyRewardsFeature(),
+        new BazaarFeature(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

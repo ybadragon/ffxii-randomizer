@@ -27,6 +27,7 @@ public sealed class ShopsFeature : IRandomizerFeature
         var rng = context.RngFor(Id);
         var table = new ShopTable(new BattlePack(context.Edit(BattlePack.UsPath)));
 
+        var original = table.Shops.ToDictionary(s => s.Index, s => s.Lists.Select(l => l.Items.ToArray()).ToArray());
         var slots = new List<Slot>();
         foreach (var shop in table.Shops)
         {
@@ -64,17 +65,24 @@ public sealed class ShopsFeature : IRandomizerFeature
 
         RemoveDuplicates(slots, rng);
 
-        foreach (var shop in table.Shops)
-        {
-            var stages = shop.Lists.Select((list, stage) => new
+        // Spoiler: one entry per shop, named by where the map scripts open it, sorted by place so it reads like a guide.
+        var where = ShopLocations.Find(context.Original);
+        string Label(ushort id) => id == 0xFFFF ? "(empty)" : catalog.Find(id)?.Name ?? (id >= 0x6000 ? $"Gambit {id:X4}" : $"Unknown {id:X4}");
+        var entries = table.Shops
+            .Select(shop => new
             {
-                stage,
-                now = list.Items.Select(catalog.NameOf).ToArray(),
-                was = slots.Where(s => s.Shop == shop && s.Stage == stage).Select(s => s.Original.Name).ToArray(),
-            }).Where(s => s.was.Length > 0).ToList();
-            if (stages.Count == 0) continue;
-            context.Spoil("shops", new { stockList = shop.Index, listedAs = shop.Info?.Name, location = shop.Info?.Location, stages });
-        }
+                places = where.TryGetValue(shop.Index, out var p) ? p.Select(x => x.ToString()).ToArray() : ["Not found in any map script"],
+                stockList = shop.Index,
+                stages = shop.Lists.Select((list, stage) => new
+                {
+                    stage,
+                    now = list.Items.Select(Label).ToArray(),
+                    was = original[shop.Index][stage].Select(Label).ToArray(),
+                }).Where(s => !s.now.SequenceEqual(s.was)).ToList(),
+            })
+            .Where(e => e.stages.Count > 0)
+            .OrderBy(e => e.places[0], StringComparer.OrdinalIgnoreCase).ThenBy(e => e.stockList);
+        foreach (var entry in entries) context.Spoil("shops", entry);
     }
 
     /// <summary>A shop selling the same item twice (in any stage) swaps one copy with a same-kind item from another shop.</summary>
@@ -114,7 +122,7 @@ public sealed class ShopsFeature : IRandomizerFeature
         {
             foreach (var id in shop.Lists.SelectMany(l => l.Items))
             {
-                if (id != 0xFFFF && id < 0x6000 && catalog.Find(id) is null) yield return $"{shop.Name} sells an unknown item {id:X4}.";
+                if (id != 0xFFFF && id < 0x6000 && catalog.Find(id) is null) yield return $"Stock list {shop.Index} sells an unknown item {id:X4}.";
             }
         }
     }

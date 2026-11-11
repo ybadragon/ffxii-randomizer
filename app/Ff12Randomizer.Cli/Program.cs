@@ -8,6 +8,33 @@ if (args.Length == 0)
     return 1;
 }
 
+if (args[0] == "respoil")
+{
+    // Rewrites the spoiler log of the newest History run (or the one with seed args[1]) with the current labels, after
+    // proving the current code rebuilds exactly the patch that run installed.
+    var game = Ff12Randomizer.Core.Game.GameInstall.FindSteamInstall() ?? throw new InvalidOperationException("Game not found.");
+    var paths = Ff12Randomizer.Core.Storage.AppPaths.Default;
+    var history = new Ff12Randomizer.Core.Storage.HistoryStore(paths);
+    var entry = history.Entries.FirstOrDefault(e => args.Length < 2 || e.Seed == args[1]) ?? throw new InvalidOperationException("No such run in History.");
+    var archive = new VbfArchive(game.DataArchivePath);
+    var run = Ff12Randomizer.Core.Randomization.RandomizerEngine.Run(archive, entry.Settings, new Ff12Randomizer.Core.Randomization.Seed(entry.Seed));
+    string temp = Path.Combine(Path.GetTempPath(), $"ff12rando-respoil-{Guid.NewGuid():N}.f12p");
+    try
+    {
+        VbfPatchBuilder.Build(archive, run.Files, temp);
+        using var stream = File.OpenRead(temp);
+        string fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream))[..16];
+        if (fingerprint != entry.PatchedFingerprint)
+            throw new InvalidOperationException($"This code makes a different game for seed {entry.Seed} ({fingerprint} vs {entry.PatchedFingerprint}); not rewriting its spoiler.");
+    }
+    finally { File.Delete(temp); }
+
+    if (entry.SpoilerPath is { } old && File.Exists(old)) File.Copy(old, old + ".bak", overwrite: true);
+    string written = Ff12Randomizer.Core.Storage.SpoilerLog.Write(paths, run, entry);
+    Console.WriteLine($"seed {entry.Seed}: same game confirmed ({entry.PatchedFingerprint}); spoiler rewritten at {written}");
+    return 0;
+}
+
 if (args[0] is "randomize" or "restore")
 {
     // Full pipeline without the window: ff12rando randomize <seed> <toggle ids...> | restore
@@ -258,7 +285,7 @@ switch (args[0])
                 foreach (var (list, n) in shop.Lists.Select((l, n) => (l, n)))
                 {
                     unknown += list.Items.Count(i => i != 0xFFFF && items.Find(i) is null);
-                    if (args.Length > 1 && shop.Name.Contains(args[1], StringComparison.OrdinalIgnoreCase))
+                    if (args.Length > 1 && args[1] == shop.Index.ToString())
                         Console.WriteLine($"   stage {n}: {string.Join(", ", list.Items.Select(items.NameOf))}");
                 }
             }
@@ -287,25 +314,65 @@ switch (args[0])
             break;
         }
 
-    case "findstock":
+    case "places":
         {
-            // findstock <spoiler.json> <item>,<item>,... : which shop lists (original or randomized) hold these items
-            var items = Ff12Randomizer.Core.GameData.ItemCatalog.Instance;
-            var wanted = args[2].Split(',').Select(s => s.Trim()).ToList();
-            int Score(IEnumerable<string> names) => wanted.Count(w => names.Any(n => n.StartsWith(w, StringComparison.OrdinalIgnoreCase)));
+            var places = new Ff12Randomizer.Core.GameData.PlaceNames(vbf);
+            Console.WriteLine($"{places.SubCount} sub-locations, {places.MainCount} main locations");
+            for (int i = 0; i < places.MainCount; i++) Console.Write($"[{i}] {places.Main(i)}  ");
+            Console.WriteLine();
+            foreach (int id in new[] { 0x2FB, 0x127, 0x12C, 0x122, 0x314, 0x27B }) Console.WriteLine($"map 0x{id:X}: {places.Sub(id)}");
+            break;
+        }
 
-            var pack = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
-            var table = new Ff12Randomizer.Core.GameData.ShopTable(pack);
-            Console.WriteLine("Original stock, best matches:");
-            foreach (var hit in table.Shops.SelectMany(s => s.Lists.Select((l, n) => (s, n, names: l.Items.Select(items.NameOf).ToList())))
-                         .OrderByDescending(h => Score(h.names)).Take(4))
-                Console.WriteLine($"  {Score(hit.names)}/{wanted.Count} [{hit.s.Index}] {hit.s.Name} stage {hit.n}: {string.Join(", ", hit.names)}");
+    case "shopplaces":
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var where = Ff12Randomizer.Core.GameData.ShopLocations.Find(vbf);
+            var table = new Ff12Randomizer.Core.GameData.ShopTable(new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!)));
+            foreach (var shop in table.Shops)
+                Console.WriteLine($"{shop.Index,2} where: {(where.TryGetValue(shop.Index, out var p) ? string.Join(" | ", p) : "NOT FOUND")}");
+            Console.WriteLine($"{where.Count}/{table.Shops.Count} lists located in {sw.ElapsedMilliseconds} ms");
+            break;
+        }
 
-            var spoiler = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(args[1]))!;
-            Console.WriteLine("Randomized stock (spoiler 'now'), best matches:");
-            foreach (var hit in spoiler["shops"]!.AsArray().SelectMany(s => s!["stages"]!.AsArray().Select(st => (shop: (string)s["shop"]!, stage: (int)st!["stage"]!,
-                         names: st["now"]!.AsArray().Select(x => (string)x!).ToList()))).OrderByDescending(h => Score(h.names)).Take(4))
-                Console.WriteLine($"  {Score(hit.names)}/{wanted.Count} {hit.shop} stage {hit.stage}: {string.Join(", ", hit.names)}");
+    case "checkplaces":
+        {
+            // Compares treasures.csv subareas with the game's own place names for the same map.
+            var places = new Ff12Randomizer.Core.GameData.PlaceNames(vbf);
+            var numbers = File.ReadLines(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Ff12Randomizer.Core", "Data", "mapAreas.csv"))
+                .Select(l => l.Split(',')).Where(p => p.Length >= 2 && int.TryParse(p[0], System.Globalization.NumberStyles.HexNumber, null, out _))
+                .GroupBy(p => p[1]).ToDictionary(g => g.Key, g => int.Parse(g.First()[0], System.Globalization.NumberStyles.HexNumber));
+            int same = 0, differ = 0, missing = 0;
+            foreach (var g in Ff12Randomizer.Core.GameData.TreasureData.Groups.DistinctBy(g => g.MapId))
+            {
+                string? game = numbers.TryGetValue(g.MapId, out int n) ? places.Sub(n) : null;
+                if (game is null) { missing++; Console.WriteLine($"  no game name: {g.MapId} csv={g.Area}: {g.Subarea}"); }
+                else if (string.Equals(game, g.Subarea, StringComparison.OrdinalIgnoreCase)) same++;
+                else { differ++; Console.WriteLine($"  DIFFER {g.MapId}: csv '{g.Subarea}' vs game '{game}'"); }
+            }
+            Console.WriteLine($"{same} same, {differ} differ, {missing} without a game name");
+            break;
+        }
+
+    case "callscan":
+        {
+            // callscan <hexCallId>...: every "PUSHII n; CALL/CALLPOPA id" in the US map scripts, i.e. bytes
+            // 4F lo hi (58|5D) idlo idhi (opcodes from ffgriever's ff12-script, BSD-2).
+            var ids = args.Skip(1).Select(a => Convert.ToUInt16(a, 16)).ToHashSet();
+            foreach (var e in vbf.Entries.Where(e => e.Name.StartsWith("ps2data/plan_master/us/plan_map/") && e.Name.EndsWith(".ebp")))
+            {
+                var b = vbf.Extract(e);
+                var found = new List<string>();
+                for (int p = 0; p + 6 <= b.Length; p++)
+                {
+                    if (b[p] != 0x4F || (b[p + 3] != 0x58 && b[p + 3] != 0x5D)) continue;
+                    ushort call = (ushort)(b[p + 4] | b[p + 5] << 8);
+                    if (!ids.Contains(call)) continue;
+                    string first = p >= 3 && b[p - 3] == 0x4F ? $"{(short)(b[p - 2] | b[p - 1] << 8)}, " : "?, ";
+                    found.Add($"{call:X4}({first}{(short)(b[p + 1] | b[p + 2] << 8)})");
+                }
+                if (found.Count > 0) Console.WriteLine($"{Path.GetFileNameWithoutExtension(e.Name)}: {string.Join(" ", found)}");
+            }
             break;
         }
 

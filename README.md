@@ -48,17 +48,39 @@ Constraints the game enforces (found by testing in game):
 `FileSizeTables\FileSizeTable_XX.fst` maps the old PS2 file IDs to sizes (205000 × u32, `FFFFFFFF`
 for unused). They will matter once a file changes size.
 
+## Where things are (spoiler names)
+
+The spoiler log names places with the game's own text, not hand-written labels:
+
+- **Shops**: map scripts open a shop with the VM call `openfullscreenmenu_48d(2, list)` (call `0x048D`),
+  compiled to `PUSHII 2; PUSHII list; CALL 0x048D` = bytes `4F 02 00 4F lo hi 58|5D 8D 04`. Scanning
+  every map script finds the map(s) that sell each of the 57 stock lists (battle_pack section 39).
+  Note: Bartz24's `shops.csv` ids do **not** match stock list positions (e.g. lists 37-42 are Rabanastre,
+  48-53 Archades), so it is no longer used.
+- **Map names**: `ps2data/image/ff12/us/bin/planmapname.bin` (`PLMN`: sub-location count, main-location
+  count, u16 offsets), indexed by map number from `mapAreas.csv`. Text uses the game's single-byte
+  encoding (A=0x20, a=0x3A, 0=0x85, space=0x04, '=0xAC...).
+- **Regions** for shop maps come from the areas the treasure data gives the same map prefix, kept only
+  when they match one of the game's region names.
+
 ## Layout
 
 - `loader/`: the `dinput8.dll` proxy (C++). Build with `loader\build.cmd` (MSVC Build Tools).
 - `app/Ff12Randomizer.Core`: archive reader (`VbfArchive`), patch builder (`VbfPatchBuilder`) and a
   C# mirror of the loader's read logic (`VirtualVbfStream`) for testing without the game.
 - `app/Ff12Randomizer.Cli`: developer commands: `list`, `extract`, `verify`, `testpatch`,
-  `whatread` (maps a verbose `loader.log` back to file names).
+  `whatread` (maps a verbose `loader.log` back to file names), `treasures`, `shops`, `shopplaces`,
+  `places`, `checkplaces`, `callscan <callId>...`, `dryrun <seed> <options>`, `randomize`, `restore`,
+  and `respoil [seed]` (rewrites a History run's spoiler with current labels after proving the current
+  code rebuilds the identical patch).
 
 Creating `ff12rando\verbose.txt` in the game folder makes the loader log every archive read.
 
 ## Credits
 
-Data-table layouts and the item, shop and treasure tables in `app/Ff12Randomizer.Core/Data` come from [Bartz24/FFModdingWPF](https://github.com/Bartz24/FFModdingWPF)
-(MIT, license in `third_party/FFModdingWPF`).
+- Data-table layouts and the item, treasure and map tables in `app/Ff12Randomizer.Core/Data` come from
+  [Bartz24/FFModdingWPF](https://github.com/Bartz24/FFModdingWPF) (MIT, license in `third_party/FFModdingWPF`).
+- Script opcodes and VM call ids from [ffgriever/ff12-script](https://gitlab.com/ffgriever/ff12-script)
+  (BSD-2-Clause, `third_party/ff12-script`).
+- The English character table and `PLMN` layout from [ffgriever/ff12-text](https://gitlab.com/ffgriever/ff12-text)
+  (BSD-2-Clause, `third_party/ff12-text`).

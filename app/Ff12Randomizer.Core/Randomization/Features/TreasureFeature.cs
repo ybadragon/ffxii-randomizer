@@ -83,15 +83,20 @@ public sealed class TreasureFeature : IRandomizerFeature
             }
         }
 
+        // Spoiler: places in the game's own names, ordered by area and place so it reads like a guide.
+        var names = new MapNames(context.Original);
+        var changed = new List<(string Area, string Place, int Chest, object Entry)>();
         for (int i = 0; i < chests.Count; i++)
         {
             var c = chests[i];
             var now = Enumerable.Range(0, Slots).Select(c.Record.GetItem).ToArray();
             if (now.SequenceEqual(before[i].Items) && c.Record.GilCommon == before[i].GilCommon && c.Record.GilRare == before[i].GilRare) continue;
-            context.Spoil("treasure", new
+            string area = c.Group?.Area ?? "";
+            string place = names.NameOf(c.Map.MapId, c.Group?.Subarea) ?? c.Map.MapId;
+            changed.Add((area, place, c.Index, new
             {
-                area = c.Group?.Area,
-                subarea = c.Group?.Subarea,
+                area,
+                place,
                 map = c.Map.MapId,
                 chest = c.Index,
                 gilChance = c.Record.GilChance,
@@ -104,8 +109,11 @@ public sealed class TreasureFeature : IRandomizerFeature
                     diamondArmlet = new[] { catalog.NameOf(before[i].Items[2]), catalog.NameOf(before[i].Items[3]) },
                     gil = c.Record.GilChance > 0 ? new[] { (int)before[i].GilCommon, before[i].GilRare } : null,
                 },
-            });
+            }));
         }
+        foreach (var entry in changed.OrderBy(e => e.Area, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(e => e.Place, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.Chest))
+            context.Spoil("treasure", entry.Entry);
     }
 
     private static ushort RollGil(Rng rng, ushort original, bool sane)

@@ -2,29 +2,17 @@ using System.Buffers.Binary;
 
 namespace Ff12Randomizer.Core.GameData;
 
-/// <summary>A shop from data/shops.csv (Bartz24's FFModdingWPF, MIT). <see cref="Id"/> is its index in the shop table.</summary>
-public sealed record ShopInfo(string Name, int Id, string Location, IReadOnlySet<string> Traits);
-
 /// <summary>
-/// battle_pack.bin section 39: the shops. A tree of nodes, each with a 0xC byte header (u32 tag, u16 element size,
-/// u16 count, u32 data offset; offsets relative to the section): the root lists shops (tag 0x64), a shop lists its stock
-/// lists (tag 0x164, one per story stage), and a stock list holds u16 item ids (tag 0x264).
-/// Layout from Bartz24's FFModdingWPF (MIT). Items are only replaced in place, so the section never changes size.
+/// battle_pack.bin section 39: the shops' stock lists. A tree of nodes, each with a 0xC byte header (u32 tag, u16 element
+/// size, u16 count, u32 data offset; offsets relative to the section): the root lists the shops (tag 0x64), a shop lists
+/// its stock per story stage (tag 0x164), and a stage holds u16 item ids (tag 0x264). Layout from Bartz24's FFModdingWPF
+/// (MIT). Items are only replaced in place, so the section never changes size. Where each list is sold is found from the
+/// map scripts by <see cref="ShopLocations"/>.
 /// </summary>
 public sealed class ShopTable
 {
     public const int Section = 39;
     private const uint RootTag = 0x64, ShopTag = 0x164, ListTag = 0x264;
-
-    /// <summary>
-    /// Shop names from data/shops.csv, keyed by stock list (the position in this table). Which list an NPC opens is decided
-    /// by the map scripts, and one list can serve several NPCs (the Stranded Merchant in Old Archades was seen selling
-    /// list 25, which the CSV names after Tetran), so these names say where a list is known from, not every NPC using it.
-    /// </summary>
-    public static IReadOnlyList<ShopInfo> Known { get; } = Csv.ReadEmbedded("shops.csv").Skip(1)
-        .Where(r => r.Count >= 4 && int.TryParse(r[1], out _))
-        .Select(r => new ShopInfo(r[0], int.Parse(r[1]), r[2], r[3].Split('|', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal)))
-        .ToList();
 
     private readonly byte[] _data;
     private readonly int _base;
@@ -50,7 +38,7 @@ public sealed class ShopTable
                 if (U32(listNode) != ListTag) throw new InvalidDataException($"Shop {i} list {j} has an unexpected node tag.");
                 lists.Add(new StockList(this, _base + (int)U32(listNode + 0x8), U16(listNode + 0x6)));
             }
-            shops.Add(new ShopStock(i, rootId, Known.FirstOrDefault(s => s.Id == i), lists));
+            shops.Add(new ShopStock(i, rootId, lists));
         }
         Shops = shops;
     }
@@ -60,12 +48,7 @@ public sealed class ShopTable
     private uint U32(int offset) => BinaryPrimitives.ReadUInt32LittleEndian(_data.AsSpan(_base + offset));
     private ushort U16(int offset) => BinaryPrimitives.ReadUInt16LittleEndian(_data.AsSpan(_base + offset));
 
-    public sealed record ShopStock(int Index, uint RootId, ShopInfo? Info, IReadOnlyList<StockList> Lists)
-    {
-        /// <summary>"Stock list 25 (listed as Tetran, Dreadnought Leviathan)": the list number is exact, the name is a hint.</summary>
-        public string Name => Info is null ? $"Stock list {Index}"
-            : $"Stock list {Index} (listed as {Info.Name}{(Info.Location.Length > 0 ? $", {Info.Location}" : "")})";
-    }
+    public sealed record ShopStock(int Index, uint RootId, IReadOnlyList<StockList> Lists);
 
     /// <summary>One stage of a shop's stock. Entries of 0xFFFF are empty.</summary>
     public sealed class StockList(ShopTable owner, int absoluteStart, int count)

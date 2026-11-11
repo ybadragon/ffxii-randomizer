@@ -20,6 +20,42 @@ public static class GameText
 }
 
 /// <summary>
+/// NPC names, ps2data/image/ff12/us/bin/npcdic.bin ("NPC0", u32 0, u32 count, then a u32 offset per string). Names come in
+/// pairs, a title and a personal name ("Desert Merchant", "Lohen"); NPC id n is strings 2n and 2n + 1. A shop's root id
+/// in the shop table (battle_pack section 39) is its merchant's NPC id: list 25 → 766 → strings 1532/1533 "Stranded
+/// Merchant", list 37 → Amal, list 50 → Granch.
+/// </summary>
+public sealed class NpcNames
+{
+    public const string ArchivePath = "ps2data/image/ff12/us/bin/npcdic.bin";
+    private readonly byte[] _data;
+    private readonly int _count;
+
+    public NpcNames(Vbf.VbfArchive archive)
+    {
+        _data = archive.Extract(archive.Find(ArchivePath) ?? throw new FileNotFoundException(ArchivePath));
+        if (Encoding.ASCII.GetString(_data, 0, 4) != "NPC0") throw new InvalidDataException("npcdic.bin isn't an NPC0 file.");
+        _count = (int)BinaryPrimitives.ReadUInt32LittleEndian(_data.AsSpan(8));
+    }
+
+    private string? At(int index)
+    {
+        if (index < 0 || index >= _count) return null;
+        int offset = (int)BinaryPrimitives.ReadUInt32LittleEndian(_data.AsSpan(0x0C + index * 4));
+        string text = offset < _data.Length ? GameText.Decode(_data.AsSpan(offset)) : "";
+        return text.Length == 0 ? null : text;
+    }
+
+    /// <summary>"Lohen (Desert Merchant)", or just "Amal" when title and name are the same.</summary>
+    public string? NameOf(uint npcId)
+    {
+        string? title = At((int)npcId * 2), name = At((int)npcId * 2 + 1);
+        if (name is null) return title;
+        return title is null || title == name ? name : $"{name} ({title})";
+    }
+}
+
+/// <summary>
 /// An "st2e" text file (menu_command.bin and others): a 32 byte header (u32 count at 0x4, entry size at 0x8, header size
 /// at 0xC, text section offset at 0x14), one u32 text id per entry, then the text section: a 12 byte header, u32 count and
 /// u32 string offsets relative to the end of that header. Layout from ffgriever's ff12-text (BSD-2).

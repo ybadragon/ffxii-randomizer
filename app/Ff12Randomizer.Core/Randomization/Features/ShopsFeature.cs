@@ -67,10 +67,12 @@ public sealed class ShopsFeature : IRandomizerFeature
 
         // Spoiler: one entry per shop, named by where the map scripts open it, sorted by place so it reads like a guide.
         var where = ShopLocations.Find(context.Original);
+        var npcs = new NpcNames(context.Original);
         string Label(ushort id) => id == 0xFFFF ? "(empty)" : catalog.Find(id)?.Name ?? (id >= 0x6000 ? $"Gambit {id:X4}" : $"Unknown {id:X4}");
         var entries = table.Shops
             .Select(shop => new
             {
+                merchant = npcs.NameOf(shop.RootId),
                 places = where.TryGetValue(shop.Index, out var p) ? p.Select(x => x.ToString()).ToArray() : ["Not found in any map script"],
                 stockList = shop.Index,
                 stages = shop.Lists.Select((list, stage) => new

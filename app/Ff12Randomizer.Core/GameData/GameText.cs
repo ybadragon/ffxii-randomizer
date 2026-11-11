@@ -20,6 +20,34 @@ public static class GameText
 }
 
 /// <summary>
+/// An "st2e" text file (menu_command.bin and others): a 32 byte header (u32 count at 0x4, entry size at 0x8, header size
+/// at 0xC, text section offset at 0x14), one u32 text id per entry, then the text section: a 12 byte header, u32 count and
+/// u32 string offsets relative to the end of that header. Layout from ffgriever's ff12-text (BSD-2).
+/// </summary>
+public sealed class St2eText
+{
+    private readonly Dictionary<uint, string> _byId = new();
+
+    public St2eText(byte[] data)
+    {
+        if (data.Length < 0x20 || Encoding.ASCII.GetString(data, 0, 4) != "st2e") throw new InvalidDataException("Not an st2e text file.");
+        int count = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(0x4));
+        int entrySize = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(0x8));
+        int headerSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(0xC));
+        int textBase = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(0x14)) + 12;
+        if (entrySize is not (4 or 8)) return;
+        for (int i = 0; i < count; i++)
+        {
+            uint id = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(headerSize + i * entrySize));
+            int offset = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(textBase + 4 + i * 4));
+            if (textBase + offset < data.Length) _byId.TryAdd(id, GameText.Decode(data.AsSpan(textBase + offset)));
+        }
+    }
+
+    public string? this[uint id] => _byId.TryGetValue(id, out string? text) && text.Length > 0 ? text : null;
+}
+
+/// <summary>
 /// The in-game name of each map script (ald_a02 → "Alley of Low Whispers"): the map's number from data/mapAreas.csv
 /// (Bartz24's FFModdingWPF, MIT) looked up in the game's own <see cref="PlaceNames"/>.
 /// </summary>

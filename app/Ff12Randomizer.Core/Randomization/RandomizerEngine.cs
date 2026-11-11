@@ -31,6 +31,7 @@ public static class RandomizerEngine
         new EnemyStatsFeature(),
         new ElementsFeature(),
         new ShopPricesFeature(),
+        new LicenseBoardsFeature(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

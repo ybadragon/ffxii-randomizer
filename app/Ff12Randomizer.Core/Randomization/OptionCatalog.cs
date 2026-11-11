@@ -69,10 +69,12 @@ public static class OptionCatalog
         new("licenses", "License Board", "The Zodiac job boards, Espers and Quickenings.",
         [
             Pick("boards", "License boards",
-                "What sits on each of the 12 job boards. Shuffle moves each board's licenses around; Randomize builds boards from any licenses. Every board stays completable.",
-                null, OrigShuffleRandom),
-            Toggle("espers", "Espers", "Which board unlocks each Esper, and where on the board it sits."),
-            Toggle("quickenings", "Quickenings", "Which characters' boards hold each Quickening."),
+                "What sits on each of the 12 job boards. Shuffle rearranges each board's own licenses; Randomize also mixes licenses between boards, so a job can end up with another job's weapons or magicks. Board shapes don't change, and Essentials, Espers and the second-board licenses stay in their cells, so every board stays fully learnable.",
+                null, OrigShuffleRandom) with { Badge = "Untested", Implemented = true },
+            Toggle("espers", "Espers", "The Esper licenses swap places with each other, across all boards, so each Esper is learned from different cells and boards.",
+                badge: "Untested", implemented: true),
+            Toggle("quickenings", "Quickenings", "The Quickening licenses swap places with each other across all boards.",
+                badge: "Untested", implemented: true),
         ]),
         new("items", "Treasure & Shops", "Treasure chests, shop stock and the bazaar.",
         [

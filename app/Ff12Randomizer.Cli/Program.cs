@@ -421,6 +421,25 @@ switch (args[0])
             break;
         }
 
+    case "boards":
+        {
+            // Per board: cell count and how many cells hold each special license type; plus the largest id used.
+            var pack = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
+            var licenses = pack.Table(12);
+            int maxId = 0;
+            for (int n = 1; n <= 12; n++)
+            {
+                var b = vbf.Extract(vbf.Find(Ff12Randomizer.Core.Randomization.Features.LicenseBoardsFeature.BoardPath(n))!);
+                var ids = Enumerable.Range(0, 576).Select(i => BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(8 + i * 2))).Where(v => v != 0xFFFF).ToList();
+                maxId = Math.Max(maxId, ids.Max());
+                var types = ids.GroupBy(id => id < licenses.Count ? licenses.Record(id)[5] : -1).ToDictionary(g => g.Key, g => g.Count());
+                var byType = string.Join(" ", types.Where(t => t.Key is >= 1 and <= 14).OrderByDescending(t => t.Value).Take(3).Select(t => $"type{t.Key}x{t.Value}"));
+                Console.WriteLine($"board {n,2} top types [{byType}]: {ids.Count} cells, essentials {ids.Count(i => i == 31)}, quickenings {types.GetValueOrDefault(19)}, espers {types.GetValueOrDefault(20)}, second board {types.GetValueOrDefault(30)}; first names: {string.Join(", ", ids.Take(3).Select(i => pack.Text(3, i)))}");
+            }
+            Console.WriteLine($"{licenses.Count} license records, largest id on a board {maxId}; license 31 is '{pack.Text(3, 31)}'");
+            break;
+        }
+
     case "callscan":
         {
             // callscan <hexCallId>...: every "PUSHII n; CALL/CALLPOPA id" in the US map scripts, i.e. bytes

@@ -30,7 +30,7 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
     public bool IsEnabled(RandomizerSettings settings) => settings.IsOn(Id);
 
     /// <summary>The enemies of one model in one area that may move: the extended records and the basic records using them.</summary>
-    private sealed record Slot(AreaData Area, uint Model, List<int> Extended, List<int> Basics);
+    private sealed record Slot(AreaData Area, uint Model, List<int> Extended, List<int> Basics, bool KeepsModel, List<string> Maps);
 
     /// <summary>A body to hand out: one extended record with the name and size that go with it.</summary>
     private sealed record Body(uint Model, byte[] Extended, byte[] NameAndSize, ushort NameId, byte[] Rewards, byte[] DefaultStats, byte[] LevelStats);
@@ -50,6 +50,7 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
             .ToDictionary(g => g.Key, g => g.Select(e => e.Name).ToList());
 
         var slots = new List<Slot>();
+        var extraEntries = new Dictionary<string, int>();
         foreach (var entry in archive.Entries.Where(e => AreaData.IsAreaFile(e.Name)).OrderBy(e => e.Name, StringComparer.Ordinal))
         {
             var area = new AreaData(entry.Name, context.Edit(entry.Name));
@@ -57,10 +58,15 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
 
             // Which units are spawned, and whether only by regular actors.
             var regular = new Dictionary<int, bool>();
+            var spawnMaps = new Dictionary<int, SortedSet<string>>();
             foreach (string map in maps)
             {
                 foreach (var (actor, unit) in Spawns(Current(map)))
+                {
                     regular[unit] = regular.GetValueOrDefault(unit, true) && RegularActor().IsMatch(actor);
+                    if (!spawnMaps.TryGetValue(unit, out var set)) spawnMaps[unit] = set = new SortedSet<string>(StringComparer.Ordinal);
+                    set.Add(Path.GetFileNameWithoutExtension(map));
+                }
             }
 
             var basicsOf = Enumerable.Range(0, area.Basic.Count).GroupBy(b => (int)area.Basic[b].Span[0])
@@ -69,9 +75,21 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
             bool Movable(int ext) => basicsOf.TryGetValue(ext, out var basics) && basics.All(b => regular.GetValueOrDefault(b));
             foreach (var group in Enumerable.Range(0, area.Extended.Count).GroupBy(ModelOf))
             {
-                // Every enemy of this model must be regular, or the map would still need the old model.
-                if (!group.All(Movable)) continue;
-                slots.Add(new Slot(area, group.Key, group.ToList(), group.SelectMany(e => basicsOf[e]).ToList()));
+                var movable = group.Where(Movable).ToList();
+                if (movable.Count == 0) continue;
+                // When another enemy of the area (a mark, say) has the same model, the maps must load both the old and the
+                // new model, so each of their load lists needs a free entry.
+                bool keeps = movable.Count < group.Count();
+                if (keeps)
+                {
+                    var lists = maps.SelectMany(m => new[] { m, m.Replace("/us/", "/in/") }).Where(m => archive.Find(m) is not null)
+                        .Where(m => LoadList(Current(m)) is var (at, count) && Enumerable.Range(0, count).Any(i => ModelAt(Current(m), at, i) == group.Key)).ToList();
+                    if (lists.Any(m => FreeEntries(Current(m)) <= extraEntries.GetValueOrDefault(m))) continue;
+                    foreach (string m in lists) extraEntries[m] = extraEntries.GetValueOrDefault(m) + 1;
+                }
+                var basics = movable.SelectMany(e => basicsOf[e]).ToList();
+                slots.Add(new Slot(area, group.Key, movable, basics, keeps,
+                    basics.SelectMany(b => spawnMaps.GetValueOrDefault(b) ?? []).Distinct().Order(StringComparer.Ordinal).ToList()));
             }
         }
 
@@ -91,6 +109,7 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
 
         bool own = context.Settings.IsOn(OwnId);
         var modelChanges = new Dictionary<string, Dictionary<uint, uint>>();
+        var keptModels = new HashSet<(string Area, uint Model)>();
         for (int i = 0; i < slots.Count; i++)
         {
             var (slot, body) = (slots[i], dealt[i]);
@@ -99,12 +118,13 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
             if (own) BringOwn(slot, body);
             if (!modelChanges.TryGetValue(slot.Area.AreaId, out var changes)) modelChanges[slot.Area.AreaId] = changes = [];
             changes[slot.Model] = body.Model;
+            if (slot.KeepsModel) keptModels.Add((slot.Area.AreaId, slot.Model));
             if (bodies[i].NameId != body.NameId)
             {
                 context.Spoil("enemyLocations", new
                 {
                     area = names.RegionOf(slot.Area.AreaId) ?? names.NameOf(slot.Area.AreaId + "01") ?? slot.Area.AreaId,
-                    areaId = slot.Area.AreaId,
+                    places = string.Join(", ", slot.Maps.Select(m => names.NameOf(m) ?? m).Distinct()),
                     was = NameOf(bodies[i].NameId),
                     now = NameOf(body.NameId),
                 });
@@ -123,9 +143,12 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
                     if (LoadList(now) is not var (at, count) || !Enumerable.Range(0, count).Any(i => changes.ContainsKey(ModelAt(now, at, i)))) continue;
                     var ebp = context.Edit(map);
                     var models = Enumerable.Range(0, count).Select(i => ModelAt(ebp, at, i))
-                        .Select(m => changes.GetValueOrDefault(m, m)).Distinct().ToList();
+                        .SelectMany(m => !changes.TryGetValue(m, out uint to) ? [m] : keptModels.Contains((areaId, m)) ? new[] { m, to } : [to])
+                        .Distinct().ToList();
+                    int room = count + FreeEntries(ebp);
+                    if (models.Count > room) throw new InvalidDataException($"{map}: no room for {models.Count} models in its load list.");
                     BinaryPrimitives.WriteUInt32LittleEndian(ebp.AsSpan(at), (uint)models.Count);
-                    for (int i = 0; i < count; i++)
+                    for (int i = 0; i < room; i++)
                         BinaryPrimitives.WriteUInt32LittleEndian(ebp.AsSpan(at + 4 + i * 4), i < models.Count ? models[i] : 0);
                 }
             }
@@ -154,6 +177,21 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
     }
 
     private static uint ModelAt(byte[] ebp, int list, int index) => BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(list + 4 + index * 4));
+
+    /// <summary>Unused (zero) entries after a map's load list, up to the next section of the file.</summary>
+    private static int FreeEntries(byte[] ebp)
+    {
+        if (LoadList(ebp) is not var (at, count)) return 0;
+        int end = ebp.Length;
+        for (int h = 0x10; h < 0x80; h += 4)
+        {
+            int section = (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(h));
+            if (section > at && section < end) end = section;
+        }
+        int free = 0;
+        for (int p = at + 4 + count * 4; p + 4 <= end && BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(p)) == 0; p += 4) free++;
+        return free;
+    }
 
     /// <summary>The model load list of a map file: its offset and entry count, or null when the map has none.</summary>
     private static (int At, int Count)? LoadList(byte[] ebp)

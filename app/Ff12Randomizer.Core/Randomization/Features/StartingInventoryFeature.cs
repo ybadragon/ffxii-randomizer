@@ -9,8 +9,8 @@ namespace Ff12Randomizer.Core.Randomization.Features;
 /// 0x34). Gear is only replaced by gear of the same class: the same armor/off-hand/accessory flags (equipment record byte
 /// 0x07), category (0x09) and icon (0x04, which tells light, mystic and heavy armor apart, as in Bartz24's FFModdingWPF), so
 /// a bow user still gets a bow and arrows and light armor stays light.
-/// Party members only get gear their starting licenses allow (<see cref="StartingLicenses"/>): the game takes anything else
-/// away. With "Starting items too", consumables are replaced by consumables with the same amount; magicks, technicks,
+/// A party member keeps wearing the original piece when the new one needs a license they don't start with
+/// (<see cref="StartingLicenses"/>; the game takes such gear off), and gets the new one in the inventory instead. With "Starting items too", consumables are replaced by consumables with the same amount; magicks, technicks,
 /// gambits and key items always stay. The
 /// character's name is battle text table 8 at the record's byte 0x30 (Vaan's record has 1, Fran's 3, Balthier's 2, matching
 /// their Dagger, Shortbow and Altair). Given when a character joins, so it needs a new game.
@@ -19,7 +19,17 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
 {
     public const string Id = "startinv";
     public const string ItemsId = "startitems";
-    private const int GearOffset = 0x0A, GearSlots = 5, NameOffset = 0x30;
+    private const int GearOffset = 0x0A, GearSlots = 5, NameOffset = 0x30, ItemIdsOffset = 0x58, ItemAmountsOffset = 0x34;
+
+    /// <summary>An unused item slot (id 0xFFFF, amount 0), or null when all ten are taken.</summary>
+    private static int? FreeItemSlot(Span<byte> record)
+    {
+        for (int s = 0; s < PartyMemberRecord.ItemSlots; s++)
+        {
+            if (record[ItemAmountsOffset + s] == 0 && BinaryPrimitives.ReadUInt16LittleEndian(record[(ItemIdsOffset + s * 2)..]) == 0xFFFF) return s;
+        }
+        return null;
+    }
 
     public bool IsEnabled(RandomizerSettings settings) => settings.IsOn(Id);
 
@@ -55,10 +65,18 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
             {
                 ushort id = BinaryPrimitives.ReadUInt16LittleEndian(record[(GearOffset + g * 2)..]);
                 if (catalog.Find(id) is not { Shuffleable: true } original || ClassOf(id) is not { } wanted) continue;
-                int member = r;
-                var pick = ItemPools.PickLike(rng, gearPool, original, sane,
-                    allowed: i => ClassOf(i.Id) == wanted && licenses.CanStartWith(member, i.Id));
-                BinaryPrimitives.WriteUInt16LittleEndian(record[(GearOffset + g * 2)..], pick.Id);
+                var pick = ItemPools.PickLike(rng, gearPool, original, sane, allowed: i => ClassOf(i.Id) == wanted);
+                if (licenses.CanStartWith(r, pick.Id))
+                {
+                    BinaryPrimitives.WriteUInt16LittleEndian(record[(GearOffset + g * 2)..], pick.Id);
+                }
+                else if (FreeItemSlot(record) is int slot)
+                {
+                    // The game takes away equipped gear without its license, so this piece goes in the bag instead and
+                    // the character keeps wearing the original.
+                    BinaryPrimitives.WriteUInt16LittleEndian(record[(ItemIdsOffset + slot * 2)..], pick.Id);
+                    record[ItemAmountsOffset + slot] = 1;
+                }
             }
             // Consumables only with "Starting items too"; magicks, technicks, gambits and key items always stay.
             for (int s = 0; swapItems && s < PartyMemberRecord.ItemSlots; s++)
@@ -87,7 +105,7 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
             .Select(g => BinaryPrimitives.ReadUInt16LittleEndian(rec.AsSpan(GearOffset + g * 2)))
             .Where(id => id != 0xFFFF).Select(catalog.NameOf).ToArray();
         string[] Items(byte[] rec) => Enumerable.Range(0, PartyMemberRecord.ItemSlots)
-            .Where(s => rec[0x34 + s] > 0 && catalog.Find(BinaryPrimitives.ReadUInt16LittleEndian(rec.AsSpan(0x58 + s * 2))) is { Category: ItemCategory.Item })
+            .Where(s => rec[0x34 + s] > 0 && catalog.Find(BinaryPrimitives.ReadUInt16LittleEndian(rec.AsSpan(0x58 + s * 2))) is { Category: ItemCategory.Item or ItemCategory.Weapon or ItemCategory.Armor or ItemCategory.Accessory })
             .Select(s => $"{catalog.NameOf(BinaryPrimitives.ReadUInt16LittleEndian(rec.AsSpan(0x58 + s * 2)))} x{rec[0x34 + s]}").ToArray();
     }
 

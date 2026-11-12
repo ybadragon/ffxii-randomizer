@@ -9,8 +9,8 @@ namespace Ff12Randomizer.Core.Randomization.Features;
 /// 0x34). Gear is only replaced by gear of the same class: the same armor/off-hand/accessory flags (equipment record byte
 /// 0x07), category (0x09) and icon (0x04, which tells light, mystic and heavy armor apart, as in Bartz24's FFModdingWPF), so
 /// a bow user still gets a bow and arrows and light armor stays light.
-/// A party member keeps wearing the original piece when the new one needs a license they don't start with
-/// (<see cref="StartingLicenses"/>; the game takes such gear off), and gets the new one in the inventory instead. With "Starting items too", consumables are replaced by consumables with the same amount; magicks, technicks,
+/// When the new piece needs a license the party member doesn't start with (<see cref="StartingLicenses"/>; the game
+/// takes such gear off), it goes in the inventory instead and the slot starts empty. With "Starting items too", consumables are replaced by consumables with the same amount; magicks, technicks,
 /// gambits and key items always stay. The
 /// character's name is battle text table 8 at the record's byte 0x30 (Vaan's record has 1, Fran's 3, Balthier's 2, matching
 /// their Dagger, Shortbow and Altair). Given when a character joins, so it needs a new game.
@@ -72,10 +72,11 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
                 }
                 else if (FreeItemSlot(record) is int slot)
                 {
-                    // The game takes away equipped gear without its license, so this piece goes in the bag instead and
-                    // the character keeps wearing the original.
+                    // The game takes away equipped gear without its license, so the new piece goes in the inventory
+                    // instead and the slot is left empty: the original piece is replaced either way.
                     BinaryPrimitives.WriteUInt16LittleEndian(record[(ItemIdsOffset + slot * 2)..], pick.Id);
                     record[ItemAmountsOffset + slot] = 1;
+                    BinaryPrimitives.WriteUInt16LittleEndian(record[(GearOffset + g * 2)..], 0xFFFF);
                 }
             }
             // Consumables only with "Starting items too"; magicks, technicks, gambits and key items always stay.

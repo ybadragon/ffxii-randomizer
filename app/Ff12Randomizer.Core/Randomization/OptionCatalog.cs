@@ -66,7 +66,7 @@ public static class OptionCatalog
                 warning: "Experimental and untested: start a new game, and keep a save outside the randomized game you can go back to. Story scenes are skipped or changed, so expect rough edges. Thanks to Bartz24 for the open world (MIT licensed)."),
             Toggle("skipprologue", "Skip the prologue",
                 "A new game skips the opening movie and Reks's prologue at Nalbina Fortress and starts where Vaan takes over, in the Garamsythe Waterway. Open world has its own start, so this does nothing with it on.",
-                badge: "Untested", implemented: true),
+                implemented: true),
         ]),
         new("party", "Party", "Starting stats, items and equipment for your party.",
         [
@@ -74,7 +74,7 @@ public static class OptionCatalog
                 "A quick way to check the randomizer is working: start a new game and Vaan's Potions stack is 99 instead of 5.",
                 badge: "Test mod", implemented: true),
             new("pstats", "Party stats", "The six main characters trade starting stats and stat growth: each takes another one's whole set, so Penelo might grow like Basch. Every value is one the game already uses.", false, [new("orig", "Original"), new("shuffle", "Shuffle between characters")], [], Badge: "Untested", Implemented: true),
-            Toggle("startinv", "Starting equipment", "The weapons, armor and accessories each party member brings when they join (guests keep theirs), swapped for gear of the same kind (a bow user still gets a bow and arrows). Each piece is replaced. A party member who doesn't start with the license for the new piece (most won't) gets it in the inventory instead, and that slot starts empty, since the game takes unlicensed gear off. Items, magicks, technicks and gambits stay. With Keep things sane, replacements stay close in strength.", badge: "Untested", implemented: true,
+            Toggle("startinv", "Starting equipment", "The weapons, armor and accessories each party member brings when they join (guests keep theirs), swapped for gear of the same kind (a bow user still gets a bow and arrows). Each piece is replaced. A party member who doesn't start with the license for the new piece (most won't) gets it in the inventory instead, and that slot starts empty, since the game takes unlicensed gear off. Items, magicks, technicks and gambits stay. With Keep things sane, replacements stay close in strength.", implemented: true,
                 subOptions: [
                     new SubOption("startlicenses", "Give the licenses for it", "Party members start with the license each new piece needs, so they wear it from the start. That whole license is learned for free: getting Light Armor 3 for a Ringmail also allows a Horned Hat, for example"),
                     new SubOption("startitems", "Starting items too", "Consumables they bring (Vaan's Potions, for example) become other consumables, in the same amounts")]),

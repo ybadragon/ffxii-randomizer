@@ -36,9 +36,9 @@ are never changed.
 | Elemental affinities | yes | not yet |
 | Weapon and armor stats | yes | not yet |
 | License boards, Espers, Quickenings | new game | not yet |
-| Starting equipment (unlicensed picks go to the inventory, or optionally come with their license; items optional) | new game | not yet |
+| Starting equipment (unlicensed picks go to the inventory, or optionally come with their license; items optional) | new game | yes |
 | Party stats (shuffle between the six) | new game | not yet |
-| Skip the prologue (start as Vaan in the Garamsythe Waterway) | new game | not yet |
+| Skip the prologue (start as Vaan in the Garamsythe Waterway) | new game | yes |
 | Vaan starts with 99 Potions (test mod) | new game | yes |
 
 Untested options carry an "Untested" badge in the app until confirmed.

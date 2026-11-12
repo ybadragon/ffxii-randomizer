@@ -33,6 +33,7 @@ are never changed.
 | Bazaar packages | yes | not yet |
 | Enemy drops, steals, poaches | yes | not yet |
 | Enemy stats | yes | not yet |
+| Enemy locations (regular enemies trade places; experimental) | yes | first swap only |
 | Elemental affinities | yes | not yet |
 | Weapon and armor stats | yes | not yet |
 | License boards, Espers, Quickenings | new game | not yet |
@@ -61,6 +62,7 @@ matched against known in-game values before use.
 | Enemy names | section 61 text table 8 | index = NameID & 0xFFF |
 | Treasure | `plan_master/us/plan_map/<area>/<map>/global/<map>.ebp` | 0x18-byte chest records |
 | Enemy rewards / stats / elements | `plan_master/in/plan_map/<area>/area/<area>.ard` | basic info drops 0x28, steals 0x32, poaches 0x44; stats 0x20-0x2D; element masks 0x29-0x2D |
+| Enemy spawns | map scripts + `.ard` | actors call `btlAtelSetUnit(n)` (call 0x3001), n = `.ard` basic record; basic byte 0 = extended record (model u32 @0x00), byte 2 = AI script, name u16 @0x08, size 0x0A-0x0F. Map `.ebp` header 0x40 → model load list (u32 count, u32 ids). Regular spawns are actors named `monster_NN` (marks `NM_`, rare `unique_`, bosses `BOSS_`) |
 | License boards | `test_battle/in/binaryfile/board_1..12.bin` | `licd` + 24x24 u16 ids |
 | Job names | `menu_command.bin` (st2e) ids 10100-10111 | board order |
 | Prologue skip | `plan_map/naf_a/naf_a01` and `naf_b/naf_b04` scripts | naf_b04 ends the prologue with `story flag = 25; btlAtelSetNextSetSaveData(1); mapjump(0x479)`; those 24 bytes are copied over the start of naf_a01's new game branch (`if (progress < 10)`), followed by that branch's own closing `JMP`. Same file length, no jump moves |

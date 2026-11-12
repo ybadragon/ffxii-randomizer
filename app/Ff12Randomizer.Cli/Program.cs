@@ -791,6 +791,14 @@ switch (args[0])
             break;
         }
 
+    case "spawns":
+        {
+            // spawns <map ebp archive path>: actor name and unit of every btlAtelSetUnit call in a map script.
+            foreach (var g in Ff12Randomizer.Core.Randomization.Features.EnemyLocationsFeature.Spawns(vbf.Extract(vbf.Find(args[1])!)).GroupBy(s => s))
+                Console.WriteLine($"{g.Key.Actor} unit {g.Key.Unit} x{g.Count()}");
+            break;
+        }
+
     case "table":
         {
             // table <section>: every record of a battle_pack table as hex, one line each.

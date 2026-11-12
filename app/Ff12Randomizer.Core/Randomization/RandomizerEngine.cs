@@ -40,6 +40,8 @@ public static class RandomizerEngine
         new StartingInventoryFeature(),
         new PartyStatsFeature(),
         new SkipPrologueFeature(),
+        new EnemySwapExperiment(),
+        new EnemyLocationsFeature(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

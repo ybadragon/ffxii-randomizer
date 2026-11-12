@@ -40,6 +40,7 @@ public static class SaveImpacts
         ["rewards"] = new(SaveImpact.ExistingSaves, "Enemy data is read when enemies appear."),
         ["estats"] = new(SaveImpact.ExistingSaves, "Enemy data is read when enemies appear."),
         ["elements"] = new(SaveImpact.ExistingSaves, "Enemy data is read when enemies appear."),
+        ["enemyspots"] = new(SaveImpact.ExistingSaves, "Enemy data is read when enemies appear."),
         ["wstats"] = new(SaveImpact.ExistingSaves, "Gear stats are read from the game data."),
         ["astats"] = new(SaveImpact.ExistingSaves, "Gear stats are read from the game data."),
     };

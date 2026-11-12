@@ -9,6 +9,7 @@ save" means load any save after relaunching the game.
 | Bazaar | yes | The bazaar in your current town: package contents match `bazaar` in the spoiler. |
 | Enemy drops / steals / poaches | yes | Steal from a common enemy a few times. The item should be one listed for that enemy under `enemyRewards`. |
 | Enemy stats | yes | Libra (or the bestiary) on a known enemy: HP or level differs from vanilla. |
+| Enemy locations | yes | Walk through a few areas: the enemies match `enemyLocations` in the spoiler (name and look), fight normally and are as strong as the ones they replaced. Note any area that crashes or shows odd enemies, with its name. |
 | Elements | yes | Libra shows weaknesses. Compare with `elements` in the spoiler. |
 | Weapon / armor stats | yes | Equipment menu: the attack of an owned weapon differs from vanilla and matches `gear`. |
 | License boards / Espers / Quickenings | new game | After the prologue, the board layout matches `licenses`. |

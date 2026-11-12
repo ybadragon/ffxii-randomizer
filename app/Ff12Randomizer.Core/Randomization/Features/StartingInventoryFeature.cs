@@ -4,7 +4,7 @@ using Ff12Randomizer.Core.GameData;
 namespace Ff12Randomizer.Core.Randomization.Features;
 
 /// <summary>
-/// What each party member and guest brings when they join (battle_pack.bin section 16, 0x80 bytes per record):
+/// What each party member (not guests: they keep their own, partly unnamed, gear) brings when they join (battle_pack.bin section 16, 0x80 bytes per record):
 /// equipment as five u16 ids at 0x0A (weapon, off-hand, head, body, accessory) and up to ten items (ids at 0x58, amounts at
 /// 0x34). Gear is only replaced by gear of the same class: the same armor/off-hand/accessory flags (equipment record byte
 /// 0x07), category (0x09) and icon (0x04, which tells light, mystic and heavy armor apart, as in Bartz24's FFModdingWPF), so
@@ -59,6 +59,8 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
 
         for (int r = 0; r < party.Count; r++)
         {
+            // Guests (Vossler, Larsa, Reddas...) keep their own gear: some of it is guest-only and has no name in the game.
+            if (!licenses.IsPartyMember(r)) continue;
             var before = party.Record(r).ToArray();
             var record = party.Record(r);
             for (int g = 0; g < GearSlots; g++)
@@ -161,6 +163,9 @@ public sealed class StartingLicenses
         }
         return result;
     }
+
+    /// <summary>Whether party record <paramref name="member"/> is a party member (it starts with some license), not a guest.</summary>
+    public bool IsPartyMember(int member) => _byMember.ContainsKey(member);
 
     /// <summary>Whether party record <paramref name="member"/> keeps <paramref name="item"/> if it starts with it.</summary>
     public bool CanStartWith(int member, ushort item) =>

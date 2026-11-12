@@ -125,6 +125,21 @@ public sealed class PatchManager(GameInstall game, Func<bool>? isGameRunning = n
         }
     }
 
+    /// <summary>The fingerprint the patch for <paramref name="files"/> would have, built in a temp file; the game isn't touched.</summary>
+    public static string FingerprintOf(VbfArchive original, IReadOnlyDictionary<string, byte[]> files)
+    {
+        string temp = Path.Combine(Path.GetTempPath(), $"ff12rando-check-{Guid.NewGuid():N}.f12p");
+        try
+        {
+            VbfPatchBuilder.Build(original, files, temp);
+            return Fingerprint(temp);
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
     private static bool IsOurLoader(string path) => File.ReadAllBytes(path).AsSpan().IndexOf(LoaderMarker) >= 0;
 
     private static string Fingerprint(string path)

@@ -9,6 +9,10 @@ public enum RunStep { CheckingGame, ReadingGameData, Randomizing, WritingAndChec
 
 public sealed record RunOutcome(HistoryEntry Entry, RunResult Result);
 
+/// <summary>This version of the randomizer makes a different game for a History run, so its spoiler log can't be rebuilt.</summary>
+public sealed class SpoilerMismatchException(string seed)
+    : Exception($"This version of the randomizer makes a slightly different game for seed {seed}, so a new spoiler log wouldn't match the game that run made.");
+
 /// <summary>One full run: randomize from the original data, install it into the game, then record it in history.</summary>
 /// <remarks>The app passes its own stores so a run appears in its History and preset lists straight away. Each store
 /// caches what it loaded, so separate instances would not see each other's changes until a restart.</remarks>
@@ -51,6 +55,24 @@ public sealed class RandomizerService(GameInstall game, AppPaths paths, PresetSt
         History.Add(entry);
         if (preset is not null) Presets.MarkUsed(preset.Id);
         return new RunOutcome(entry, result);
+    }
+
+    /// <summary>
+    /// Rewrites a History run's spoiler log with this version's labels and sections. It first rebuilds the run and checks
+    /// the result is byte for byte the game that run installed, so the log can never describe a different game. Doesn't
+    /// touch the game. The previous log is kept next to it as .bak.
+    /// </summary>
+    /// <exception cref="SpoilerMismatchException">This version makes a different game for that run's seed and settings.</exception>
+    public string RefreshSpoiler(HistoryEntry entry)
+    {
+        var original = Patcher.OpenOriginal();
+        var result = RandomizerEngine.Run(original, entry.Settings, new Seed(entry.Seed));
+        if (entry.PatchedFingerprint is null || PatchManager.FingerprintOf(original, result.Files) != entry.PatchedFingerprint)
+            throw new SpoilerMismatchException(entry.Seed);
+        if (entry.SpoilerPath is { } old && File.Exists(old)) File.Copy(old, old + ".bak", overwrite: true);
+        entry.SpoilerPath = SpoilerLog.Write(paths, result, entry);
+        History.Update(entry);
+        return entry.SpoilerPath;
     }
 
     /// <summary>The history entry whose run is in the game right now, if any.</summary>

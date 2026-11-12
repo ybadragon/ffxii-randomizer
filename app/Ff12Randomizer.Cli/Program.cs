@@ -17,21 +17,8 @@ if (args[0] == "respoil")
     var paths = Ff12Randomizer.Core.Storage.AppPaths.Default;
     var history = new Ff12Randomizer.Core.Storage.HistoryStore(paths);
     var entry = history.Entries.FirstOrDefault(e => args.Length < 2 || e.Seed == args[1]) ?? throw new InvalidOperationException("No such run in History.");
-    var archive = new VbfArchive(game.DataArchivePath);
-    var run = Ff12Randomizer.Core.Randomization.RandomizerEngine.Run(archive, entry.Settings, new Ff12Randomizer.Core.Randomization.Seed(entry.Seed));
-    string temp = Path.Combine(Path.GetTempPath(), $"ff12rando-respoil-{Guid.NewGuid():N}.f12p");
-    try
-    {
-        VbfPatchBuilder.Build(archive, run.Files, temp);
-        using var stream = File.OpenRead(temp);
-        string fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream))[..16];
-        if (fingerprint != entry.PatchedFingerprint)
-            throw new InvalidOperationException($"This code makes a different game for seed {entry.Seed} ({fingerprint} vs {entry.PatchedFingerprint}); not rewriting its spoiler.");
-    }
-    finally { File.Delete(temp); }
-
-    if (entry.SpoilerPath is { } old && File.Exists(old)) File.Copy(old, old + ".bak", overwrite: true);
-    string written = Ff12Randomizer.Core.Storage.SpoilerLog.Write(paths, run, entry);
+    // Same code as the app's History "Update spoiler log" button.
+    string written = new Ff12Randomizer.Core.RandomizerService(game, paths, history: history).RefreshSpoiler(entry);
     Console.WriteLine($"seed {entry.Seed}: same game confirmed ({entry.PatchedFingerprint}); spoiler rewritten at {written}");
     return 0;
 }

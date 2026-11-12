@@ -135,6 +135,8 @@ The spoiler log names places with the game's own text, not hand-written labels:
 
 The app shows spoiler logs itself (History → Spoiler log): one table per section, sortable columns and a search over
 everything. `{"was": a, "now": b}` values show as "a → b". `spoilerview <file>` and `dryrun ... -t` print the same tables.
+History → Update spoiler log rewrites a run's log with the current version's names and sections, after rebuilding the run and
+checking it is byte for byte the game that run installed (CLI: `respoil [seed]`).
 
 Creating `ff12rando\verbose.txt` in the game folder makes the loader log every archive read.
 

@@ -38,5 +38,11 @@ public sealed class HistoryStore(AppPaths paths)
         Save();
     }
 
+    /// <summary>Saves changes made to an entry already in the list (a new spoiler path, for example).</summary>
+    public void Update(HistoryEntry entry)
+    {
+        if (Entries.Contains(entry)) Save();
+    }
+
     private void Save() => JsonFile.Save(paths.HistoryPath, Entries);
 }

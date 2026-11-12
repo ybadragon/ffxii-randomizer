@@ -482,6 +482,34 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// History's "Update spoiler log": rebuilds a run's spoiler log with this version's names and sections, after checking
+    /// this version makes exactly the game that run installed, then shows it. The game isn't touched.
+    /// </summary>
+    public async Task UpdateSpoilerAsync(HistoryEntry entry)
+    {
+        if (_service is null)
+        {
+            ShowGameNotFound();
+            return;
+        }
+        try
+        {
+            string path = await Task.Run(() => _service.RefreshSpoiler(entry));
+            RefreshLists();
+            ShowSpoiler(path);
+        }
+        catch (SpoilerMismatchException e)
+        {
+            ShowProblem("Can't update this spoiler log", $"{e.Message} Its log is unchanged. For an up-to-date log, use Replay this seed: it installs this version's game for the same seed, with a new log.",
+                ProblemTone.Info, "OK", CloseOverlay);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        {
+            ShowProblem("Couldn't update the spoiler log", e.Message, ProblemTone.Warning, "OK", CloseOverlay);
+        }
+    }
+
     /// <summary>Opens a spoiler log in the app's viewer; if it can't be read, offers the file itself.</summary>
     public void ShowSpoiler(string? path)
     {

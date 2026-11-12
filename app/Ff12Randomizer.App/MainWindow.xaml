@@ -217,6 +217,9 @@
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Style="{StaticResource LinkButton}" Content="Spoiler log" Command="{Binding OpenSpoilerCommand}" Margin="0,0,8,0"
                                 Visibility="{Binding HasSpoiler, Converter={StaticResource Show}}" />
+                        <Button Style="{StaticResource LinkButton}" Content="{Binding UpdateSpoilerLabel}" Command="{Binding UpdateSpoilerCommand}" Margin="0,0,8,0"
+                                Visibility="{Binding CanUpdateSpoiler, Converter={StaticResource Show}}"
+                                ToolTip="Rebuild this run's spoiler log with this version's names and sections. It checks this version makes the same game first; the game isn't touched." />
                         <Button Style="{StaticResource SecondaryButton}" Content="Use settings" Command="{Binding UseSettingsCommand}" Margin="0,0,8,0"
                                 ToolTip="Load these settings with a new random seed" />
                         <Button Style="{StaticResource SecondaryButton}" Content="Replay this seed" Command="{Binding ReplaySeedCommand}" Margin="0,0,8,0"

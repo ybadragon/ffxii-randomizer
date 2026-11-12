@@ -58,6 +58,33 @@ public sealed partial class HistoryItemViewModel(HistoryEntry entry, bool curren
     [RelayCommand] private void UseSettings() => main.UseHistorySettings(entry, replaySeed: false);
     [RelayCommand] private void ReplaySeed() => main.UseHistorySettings(entry, replaySeed: true);
     [RelayCommand] private void OpenSpoiler() => main.ShowSpoiler(entry.SpoilerPath);
+
+    /// <summary>Runs from before the fingerprint was recorded can't be checked, so they can't be updated.</summary>
+    public bool CanUpdateSpoiler => entry.PatchedFingerprint is not null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateSpoilerLabel))]
+    private bool _isUpdatingSpoiler;
+
+    public string UpdateSpoilerLabel => IsUpdatingSpoiler ? "Updating…" : HasSpoiler ? "Update spoiler log" : "Make spoiler log";
+
+    [RelayCommand(CanExecute = nameof(CanStartUpdate))]
+    private async Task UpdateSpoiler()
+    {
+        IsUpdatingSpoiler = true;
+        UpdateSpoilerCommand.NotifyCanExecuteChanged();
+        try
+        {
+            await main.UpdateSpoilerAsync(entry);
+        }
+        finally
+        {
+            IsUpdatingSpoiler = false;
+            UpdateSpoilerCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanStartUpdate() => !IsUpdatingSpoiler;
     [RelayCommand] private void Delete() => main.DeleteHistory(entry);
 
     [ObservableProperty] private bool _seedCopied;

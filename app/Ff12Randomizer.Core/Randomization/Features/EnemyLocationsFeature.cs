@@ -33,7 +33,11 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
     private sealed record Slot(AreaData Area, uint Model, List<int> Extended, List<int> Basics);
 
     /// <summary>A body to hand out: one extended record with the name and size that go with it.</summary>
-    private sealed record Body(uint Model, byte[] Extended, byte[] NameAndSize, ushort NameId);
+    private sealed record Body(uint Model, byte[] Extended, byte[] NameAndSize, ushort NameId, byte[] Rewards, byte[] DefaultStats, byte[] LevelStats);
+
+    public const string OwnId = "enemyown";
+    // Basic record: drops, steals, poaches and their chances; and the indexes of its two stats records.
+    private const int RewardsStart = 0x28, RewardsEnd = 0x50, DefaultStatsIndex = 0x22, LevelStatsIndex = 0x24;
 
     public void Apply(RandomizerContext context)
     {
@@ -75,7 +79,8 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
         {
             var basic = s.Area.Basic[s.Basics[0]].Span;
             return new Body(s.Model, s.Area.Extended[basic[0]].ToArray(), basic.Slice(0x08, 8).ToArray(),
-                BinaryPrimitives.ReadUInt16LittleEndian(basic[0x08..]));
+                BinaryPrimitives.ReadUInt16LittleEndian(basic[0x08..]), basic[RewardsStart..RewardsEnd].ToArray(),
+                s.Area.DefaultStats[basic[DefaultStatsIndex]].ToArray(), s.Area.LevelStats[basic[LevelStatsIndex]].ToArray());
         }).ToList();
         var dealt = bodies.ToList();
         context.RngFor(Id).Shuffle(dealt);
@@ -84,12 +89,14 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
         var pack = new BattlePack(archive.Extract(archive.Find(BattlePack.UsPath)!));
         string NameOf(ushort nameId) => pack.Text(BattlePack.NamesTable, nameId & 0xFFF) ?? $"Enemy {nameId:X4}";
 
+        bool own = context.Settings.IsOn(OwnId);
         var modelChanges = new Dictionary<string, Dictionary<uint, uint>>();
         for (int i = 0; i < slots.Count; i++)
         {
             var (slot, body) = (slots[i], dealt[i]);
             foreach (int ext in slot.Extended) body.Extended.CopyTo(slot.Area.Extended[ext].Span);
             foreach (int basic in slot.Basics) body.NameAndSize.CopyTo(slot.Area.Basic[basic].Span[0x08..]);
+            if (own) BringOwn(slot, body);
             if (!modelChanges.TryGetValue(slot.Area.AreaId, out var changes)) modelChanges[slot.Area.AreaId] = changes = [];
             changes[slot.Model] = body.Model;
             if (bodies[i].NameId != body.NameId)
@@ -122,6 +129,27 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
                         BinaryPrimitives.WriteUInt32LittleEndian(ebp.AsSpan(at + 4 + i * 4), i < models.Count ? models[i] : 0);
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// "Keep their own stats and drops": the enemy brings its rewards and both stats records. A stats record is only
+    /// overwritten when no enemy outside this slot uses it (a mark sharing it keeps its stats). Levels still come from
+    /// the spawn scripts of the place.
+    /// </summary>
+    private static void BringOwn(Slot slot, Body body)
+    {
+        var area = slot.Area;
+        bool Private(int offset, byte index) =>
+            Enumerable.Range(0, area.Basic.Count).Where(b => area.Basic[b].Span[offset] == index).All(slot.Basics.Contains);
+        foreach (int b in slot.Basics)
+        {
+            var basic = area.Basic[b].Span;
+            body.Rewards.CopyTo(basic[RewardsStart..]);
+            if (basic[DefaultStatsIndex] < area.DefaultStats.Count && Private(DefaultStatsIndex, basic[DefaultStatsIndex]))
+                body.DefaultStats.CopyTo(area.DefaultStats[basic[DefaultStatsIndex]].Span);
+            if (basic[LevelStatsIndex] < area.LevelStats.Count && Private(LevelStatsIndex, basic[LevelStatsIndex]))
+                body.LevelStats.CopyTo(area.LevelStats[basic[LevelStatsIndex]].Span);
         }
     }
 

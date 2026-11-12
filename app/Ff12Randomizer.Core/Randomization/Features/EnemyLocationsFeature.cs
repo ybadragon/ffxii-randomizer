@@ -77,16 +77,11 @@ public sealed partial class EnemyLocationsFeature : IRandomizerFeature
             {
                 var movable = group.Where(Movable).ToList();
                 if (movable.Count == 0) continue;
-                // When another enemy of the area (a mark, say) has the same model, the maps must load both the old and the
-                // new model, so each of their load lists needs a free entry.
-                bool keeps = movable.Count < group.Count();
-                if (keeps)
-                {
-                    var lists = maps.SelectMany(m => new[] { m, m.Replace("/us/", "/in/") }).Where(m => archive.Find(m) is not null)
-                        .Where(m => LoadList(Current(m)) is var (at, count) && Enumerable.Range(0, count).Any(i => ModelAt(Current(m), at, i) == group.Key)).ToList();
-                    if (lists.Any(m => FreeEntries(Current(m)) <= extraEntries.GetValueOrDefault(m))) continue;
-                    foreach (string m in lists) extraEntries[m] = extraEntries.GetValueOrDefault(m) + 1;
-                }
+                // Every enemy of this model must be regular: when another enemy of the area (a mark, say) shares the model,
+                // the group stays. Loading both the old and the new model was tried and the newcomer came out broken in
+                // game (T-pose, no attacks).
+                if (movable.Count < group.Count()) continue;
+                const bool keeps = false;
                 var basics = movable.SelectMany(e => basicsOf[e]).ToList();
                 slots.Add(new Slot(area, group.Key, movable, basics, keeps,
                     basics.SelectMany(b => spawnMaps.GetValueOrDefault(b) ?? []).Distinct().Order(StringComparer.Ordinal).ToList()));

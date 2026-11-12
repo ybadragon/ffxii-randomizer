@@ -49,6 +49,9 @@ public static class RandomizerEngine
         // Names items.csv lacks come from the battle text this run will install (the open world renames key items).
         var catalog = ItemCatalog.Instance;
         (byte[] Data, GameItemNames Names)? names = null;
+        // Whether the game names an item at all comes from the vanilla text: nothing unnamed is ever handed out.
+        var vanillaNames = new GameItemNames(new BattlePack(original.Extract(original.Find(BattlePack.UsPath)!)), catalog);
+        catalog.NamedInGame = vanillaNames.IsNamed;
         catalog.GameNames = id =>
         {
             var data = context.ChangedFiles.GetValueOrDefault(BattlePack.UsPath) ?? (names?.Data ?? original.Extract(original.Find(BattlePack.UsPath)!));
@@ -62,6 +65,7 @@ public static class RandomizerEngine
         finally
         {
             catalog.GameNames = null;
+            catalog.NamedInGame = null;
         }
         var problems = enabled.SelectMany(f => f.Validate(context)).Distinct().ToList();
         foreach (var (name, bytes) in context.ChangedFiles)

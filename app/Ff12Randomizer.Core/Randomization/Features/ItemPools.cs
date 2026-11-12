@@ -25,9 +25,9 @@ internal static class ItemPools
         return PickNear(rng, pool, original.Rank + rankBonus, sane, allowed: sane ? i => i.Category != ItemCategory.Loot && Also(i) : Also);
     }
 
-    /// <summary>Items that may be handed out by a randomizer at all.</summary>
+    /// <summary>Items that may be handed out by a randomizer at all; never one the game itself doesn't name (guest gear).</summary>
     public static IReadOnlyList<ItemInfo> Shuffleable(ItemCatalog catalog) =>
-        catalog.All.Where(i => i.Shuffleable).OrderBy(i => i.Id).ToList();
+        catalog.All.Where(i => i.Shuffleable && catalog.NamedInGame?.Invoke(i.Id) != false).OrderBy(i => i.Id).ToList();
 
     /// <summary>
     /// A random item from <paramref name="pool"/> with a rank within <paramref name="spread"/> of <paramref name="rank"/>,

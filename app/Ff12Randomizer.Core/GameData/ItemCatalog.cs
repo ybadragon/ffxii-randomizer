@@ -42,6 +42,12 @@ public sealed class ItemCatalog
     /// </summary>
     public Func<ushort, string?>? GameNames { get; set; }
 
+    /// <summary>
+    /// Whether the game itself names an item: false for things it never shows (guest-only gear, marked NOT USED), null when
+    /// unknown. Set with <see cref="GameNames"/>; randomizers never hand out items the game doesn't name.
+    /// </summary>
+    public Func<ushort, bool?>? NamedInGame { get; set; }
+
     private static ItemCatalog Load()
     {
         var items = new List<ItemInfo>();
@@ -122,6 +128,15 @@ public sealed class GameItemNames
             // Only trust a table that names most of what the catalog knows of this kind.
             if (best >= 0 && bestMatches * 2 >= kind.Count()) _tableByKind[kind.Key] = best;
         }
+    }
+
+    /// <summary>True when the game names <paramref name="id"/>, false for a placeholder or missing entry, null when no
+    /// text table is known for its kind.</summary>
+    public bool? IsNamed(ushort id)
+    {
+        if (!_tableByKind.TryGetValue(id >> 12, out int table)) return null;
+        string? text = _pack.Text(table, id & 0xFFF);
+        return text is not null && !Placeholders.Any(p => text.StartsWith(p, StringComparison.Ordinal));
     }
 
     public string? NameOf(ushort id)

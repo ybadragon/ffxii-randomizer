@@ -102,6 +102,9 @@ public sealed class MapNames(PlaceNames places)
 
     public string? NameOf(string mapId) => Numbers.TryGetValue(mapId, out int number) ? Places.Sub(number) : null;
 
+    /// <summary>The map script id of a map number, as scripts pass it to mapjump (0x479 → grm_g01).</summary>
+    public static string? IdOf(int number) => Numbers.FirstOrDefault(kv => kv.Value == number).Key;
+
     private Dictionary<string, string>? _regions;
 
     /// <summary>

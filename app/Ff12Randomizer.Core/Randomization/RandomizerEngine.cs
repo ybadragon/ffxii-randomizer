@@ -38,6 +38,7 @@ public static class RandomizerEngine
         new LicenseBoardsFeature(),
         new StartingInventoryFeature(),
         new PartyStatsFeature(),
+        new SkipPrologueFeature(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

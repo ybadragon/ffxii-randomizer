@@ -64,6 +64,9 @@ public static class OptionCatalog
                 "Based on Bartz24's FF12 Open World Randomizer: the story no longer walls areas off. Key items like the aeropasses, the Writ of Transit and the story's nethicite open the way instead, and story events and hunts hand them out. Uses that randomizer's default key item layout; the spoiler log lists where each one is, under Open world rewards. Combine it freely with the other options.",
                 badge: "Experimental", implemented: true,
                 warning: "Experimental and untested: start a new game, and keep a save outside the randomized game you can go back to. Story scenes are skipped or changed, so expect rough edges. Thanks to Bartz24 for the open world (MIT licensed)."),
+            Toggle("skipprologue", "Skip the prologue",
+                "A new game skips the opening movie and Reks's prologue at Nalbina Fortress and starts where Vaan takes over, in the Garamsythe Waterway. Open world has its own start, so this does nothing with it on.",
+                badge: "Untested", implemented: true),
         ]),
         new("party", "Party", "Starting stats, items and equipment for your party.",
         [

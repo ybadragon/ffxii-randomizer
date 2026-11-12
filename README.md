@@ -38,6 +38,7 @@ are never changed.
 | License boards, Espers, Quickenings | new game | not yet |
 | Starting equipment and items | new game | not yet |
 | Party stats (shuffle between the six) | new game | not yet |
+| Skip the prologue (start as Vaan in the Garamsythe Waterway) | new game | not yet |
 | Vaan starts with 99 Potions (test mod) | new game | yes |
 
 Untested options carry an "Untested" badge in the app until confirmed.
@@ -62,6 +63,7 @@ matched against known in-game values before use.
 | Enemy rewards / stats / elements | `plan_master/in/plan_map/<area>/area/<area>.ard` | basic info drops 0x28, steals 0x32, poaches 0x44; stats 0x20-0x2D; element masks 0x29-0x2D |
 | License boards | `test_battle/in/binaryfile/board_1..12.bin` | `licd` + 24x24 u16 ids |
 | Job names | `menu_command.bin` (st2e) ids 10100-10111 | board order |
+| Prologue skip | `plan_map/naf_a/naf_a01` and `naf_b/naf_b04` scripts | naf_b04 ends the prologue with `story flag = 25; btlAtelSetNextSetSaveData(1); mapjump(0x479)`; those 24 bytes are copied over the start of naf_a01's new game branch (`if (progress < 10)`), followed by that branch's own closing `JMP`. Same file length, no jump moves |
 
 ## How it works
 

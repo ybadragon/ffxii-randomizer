@@ -15,5 +15,6 @@ save" means load any save after relaunching the game.
 | Starting equipment / items | new game | Vaan's inventory right after the prologue. |
 | Party stats | new game | Status screen of the first party members. |
 | Open world | new game | New game, play to the first free roam. Check that Rabanastre exits aren't story-locked and that a key item reward appears where `openWorldRewards` says. Note any crash with the map name. |
+| Skip the prologue | new game | New Game goes straight to Vaan in the Garamsythe Waterway (no opening movie, no Reks). Vaan should be alone in the party with his usual starting gear, and the rat fight and the walk up to Rabanastre should play normally. |
 
 Afterwards, put your own seed back: the app's History, or `reinstall 162895018` from the CLI.

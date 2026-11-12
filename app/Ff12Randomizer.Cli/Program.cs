@@ -174,6 +174,16 @@ switch (args[0])
         Console.WriteLine($"{entry.Name}: {data.Length} bytes");
         break;
 
+    case "extractmany":
+        // extractmany <list file> <out dir>: extracts every archive path listed (one per line), keeping the paths.
+        foreach (var name in File.ReadAllLines(args[1]).Where(l => l.Length > 0))
+        {
+            var target = Path.Combine(args[2], name.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.WriteAllBytes(target, vbf.Extract(vbf.Find(name) ?? throw new FileNotFoundException(name)));
+        }
+        break;
+
     case "blocks":
         var be = vbf.Find(args[1]) ?? throw new FileNotFoundException(args[1]);
         using (var fs = File.OpenRead(vbf.Path))
@@ -415,6 +425,16 @@ switch (args[0])
             var run = Ff12Randomizer.Core.Randomization.RandomizerEngine.Run(vbf, settings, new Ff12Randomizer.Core.Randomization.Seed(args[1]));
             Console.WriteLine($"{sw.ElapsedMilliseconds} ms, {run.Files.Count} files changed, {run.Problems.Count} problems");
             foreach (var p in run.Problems.Take(10)) Console.WriteLine($"  PROBLEM {p}");
+            if (Array.IndexOf(args, "-o") is var o and > 0 && o + 1 < args.Length)
+            {
+                // -o <dir>: also writes every changed file there, under its archive path.
+                foreach (var (name, bytes) in run.Files)
+                {
+                    var target = Path.Combine(args[o + 1], name.Replace('/', Path.DirectorySeparatorChar));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.WriteAllBytes(target, bytes);
+                }
+            }
             if (args.Contains("-t"))
             {
                 var root = new System.Text.Json.Nodes.JsonObject();

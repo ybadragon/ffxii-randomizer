@@ -79,19 +79,27 @@ public sealed class LicenseBoardsFeature : IRandomizerFeature
         if (context.Settings.IsOn(Quickenings))
             ShuffleInto(context.RngFor(Quickenings), cells.SelectMany(c => c).Where(c => TypeOf(c.License) == QuickeningType).ToList());
 
-        // Spoiler: per board (named by its job), each license that moved and where to (row, column), in the game's names.
+        // Spoiler: per board (named by its job), each license that moved and where to (row, column), in the game's names,
+        // with the kind of license before and after; plus a count of kind-to-kind swaps per board.
         string Name(ushort id) => pack.Text(LicenseNamesTable, id) ?? $"License {id}";
+        var kinds = LicenseKinds.Read(pack);
         var menu = context.Original.Find(MenuCommandPath) is { } entry ? new St2eText(context.Original.Extract(entry)) : null;
         for (int b = 0; b < Boardcount; b++)
         {
             var moved = new List<object>();
+            var swaps = new List<(string From, string To)>();
             for (int i = 0; i < Size * Size; i++)
             {
                 ushort now = BinaryPrimitives.ReadUInt16LittleEndian(boards[b].AsSpan(HeaderSize + i * 2));
                 ushort was = BinaryPrimitives.ReadUInt16LittleEndian(before[b].AsSpan(HeaderSize + i * 2));
-                if (now != was) moved.Add(new { row = i / Size + 1, column = i % Size + 1, license = Name(now), was = Name(was) });
+                if (now == was) continue;
+                moved.Add(new { row = i / Size + 1, column = i % Size + 1, license = Name(now), kind = kinds.Of(now), was = Name(was), wasKind = kinds.Of(was) });
+                swaps.Add((kinds.Of(was), kinds.Of(now)));
             }
-            if (moved.Count > 0) context.Spoil("licenseBoards", new { board = b + 1, job = menu?[FirstJobNameId + (uint)b], changedCells = moved });
+            string? job = menu?[FirstJobNameId + (uint)b];
+            if (moved.Count > 0) context.Spoil("licenseBoards", new { board = b + 1, job, changedCells = moved });
+            foreach (var g in swaps.Where(s => s.From != s.To).GroupBy(s => s).OrderByDescending(g => g.Count()).ThenBy(g => g.Key.From))
+                context.Spoil("licenseKindSwaps", new { board = b + 1, job, was = g.Key.From, now = g.Key.To, cells = g.Count() });
         }
     }
 
@@ -124,5 +132,55 @@ public sealed class LicenseBoardsFeature : IRandomizerFeature
         }
         if (!allBefore.Order().SequenceEqual(allNow.Order())) problems.Add("The boards no longer hold the same licenses overall.");
         return problems;
+    }
+}
+
+/// <summary>
+/// What kind of license each license is, for the spoiler. The game has no names for its license types (byte 0x05 only picks
+/// a board icon), so kinds come from the data: licenses sharing a name stem form a kind ("White Magick 1".."9" → White
+/// Magick; Gambit Slot; Swords). A one-off license is named by what it unlocks (equipment → Weapons, Armor or Accessories
+/// by item category), by its type when that is the Quickening or Esper type, as Technicks or Magicks when its
+/// value is the ability of the same name (abilities from 158 on are technicks), and otherwise it is an augment (+230 HP, Adrenaline).
+/// </summary>
+public sealed class LicenseKinds
+{
+    private const int AbilityNamesTable = 0;
+    private readonly Dictionary<ushort, string> _kinds = [];
+
+    public string Of(ushort license) => _kinds.GetValueOrDefault(license, "Other");
+
+    public static LicenseKinds Read(BattlePack pack)
+    {
+        var result = new LicenseKinds();
+        var table = pack.Table(LicenseBoardsFeature.LicenseSection);
+        var catalog = ItemCatalog.Instance;
+        var licenses = Enumerable.Range(0, table.Count).Select(i =>
+        {
+            var record = table.Record(i).ToArray();
+            string name = pack.Text(LicenseBoardsFeature.LicenseNamesTable, i) ?? "";
+            string stem = name.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').TrimEnd();
+            var items = Enumerable.Range(0, StartingLicenses.ItemSlots)
+                .Select(s => BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(StartingLicenses.ItemsOffset + s * 2)))
+                .Where(id => id != 0xFFFF).ToList();
+            return (Id: (ushort)i, Name: name, Stem: stem, Type: record[LicenseBoardsFeature.TypeOffset], Items: items);
+        }).ToList();
+        // Abilities: a license whose value is an ability (battle text table 0) of the same name. Technicks follow the
+        // magicks; the first technick's ability index is byte 0x04 of the technick table's first record.
+        int technickBase = pack.Table(ShopPricesFeature.TechnickSection).Record(0)[0x04];
+        bool IsAbility((ushort Id, string Name, string Stem, byte Type, List<ushort> Items) l) =>
+            l.Items.Count > 0 && l.Items[0] < 0x1000 && pack.Text(AbilityNamesTable, l.Items[0]) == l.Name;
+        var shared = licenses.GroupBy(l => l.Stem).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
+        foreach (var l in licenses)
+        {
+            result._kinds[l.Id] = shared.Contains(l.Stem) && l.Stem.Length > 0 ? l.Stem
+                : l.Type == LicenseBoardsFeature.QuickeningType ? "Quickenings"
+                : l.Type == LicenseBoardsFeature.EsperType ? "Espers"
+                : IsAbility(l) ? (l.Items[0] >= technickBase ? "Technicks" : "Magicks")
+                : l.Items.Count > 0 && catalog.Find(l.Items[0])?.Category is ItemCategory.Weapon ? "Weapons"
+                : l.Items.Count > 0 && catalog.Find(l.Items[0])?.Category is ItemCategory.Armor ? "Armor"
+                : l.Items.Count > 0 && catalog.Find(l.Items[0])?.Category is ItemCategory.Accessory ? "Accessories"
+                : "Augments";
+        }
+        return result;
     }
 }

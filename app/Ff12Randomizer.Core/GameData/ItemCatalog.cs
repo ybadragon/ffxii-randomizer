@@ -129,7 +129,42 @@ public sealed class GameItemNames
         if (!_tableByKind.TryGetValue(id >> 12, out int table)) return null;
         string? text = _pack.Text(table, id & 0xFFF);
         if (text is null) return null;
-        // Things the game never shows (guest-only gear) are marked "NOT USED" and the like in its text.
-        return Placeholders.Any(p => text.StartsWith(p, StringComparison.Ordinal)) ? $"Unnamed {id:X4}" : text;
+        // Things the game never shows (guest-only gear) are marked "NOT USED" and the like in all of its text.
+        if (!Placeholders.Any(p => text.StartsWith(p, StringComparison.Ordinal))) return text;
+        return KindOf(id) is { } kind ? $"{kind} type, no name ({id:X4})" : $"No name ({id:X4})";
+    }
+
+    private Dictionary<byte, string>? _kinds;
+
+    /// <summary>
+    /// What kind of equipment an id is, named after the licenses that cover equipment of the same class (equipment record
+    /// type, byte 0x09 of the equipment record): "Shields", "Swords"... The license name without its trailing number.
+    /// </summary>
+    private string? KindOf(ushort id)
+    {
+        const int Equipment = 13, Licenses = 12, LicenseNames = 3, First = 0x1000;
+        var gear = _pack.Table(Equipment);
+        byte? ClassOf(int item)
+        {
+            int i = item - First;
+            return i < 0 || i >= gear.Count ? null : gear.Record(i)[0x09];
+        }
+        if (_kinds is null)
+        {
+            _kinds = [];
+            var licenses = _pack.Table(Licenses);
+            for (int l = 0; l < licenses.Count; l++)
+            {
+                string? name = _pack.Text(LicenseNames, l)?.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ' ');
+                if (string.IsNullOrEmpty(name)) continue;
+                var record = licenses.Record(l);
+                for (int s = 0; s < 8; s++)
+                {
+                    int item = record[0x08 + s * 2] | record[0x09 + s * 2] << 8;
+                    if (ClassOf(item) is { } c) _kinds.TryAdd(c, name);
+                }
+            }
+        }
+        return ClassOf(id) is { } cls ? _kinds.GetValueOrDefault(cls) : null;
     }
 }

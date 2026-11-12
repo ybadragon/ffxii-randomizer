@@ -786,6 +786,24 @@ switch (args[0])
             break;
         }
 
+    case "strings":
+        {
+            // strings <local file>: every NUL-separated run of game-encoded text with its byte offset.
+            var bytes = File.ReadAllBytes(args[1]);
+            int start = 0;
+            for (int p = 0; p <= bytes.Length; p++)
+            {
+                if (p < bytes.Length && bytes[p] != 0) continue;
+                if (p - start >= 3)
+                {
+                    string s = Ff12Randomizer.Core.GameData.GameText.Decode(bytes.AsSpan(start, p - start + (p < bytes.Length ? 1 : 0)));
+                    if (s.Length >= 3) Console.WriteLine($"{start:X6} {s}");
+                }
+                start = p + 1;
+            }
+            break;
+        }
+
     case "table":
         {
             // table <section>: every record of a battle_pack table as hex, one line each.

@@ -12,7 +12,7 @@ save" means load any save after relaunching the game.
 | Elements | yes | Libra shows weaknesses. Compare with `elements` in the spoiler. |
 | Weapon / armor stats | yes | Equipment menu: the attack of an owned weapon differs from vanilla and matches `gear`. |
 | License boards / Espers / Quickenings | new game | After the prologue, the board layout matches `licenses`. |
-| Starting equipment / items | new game | Vaan's inventory right after the prologue. |
+| Starting equipment | new game | Penelo and Basch join wearing the gear listed under `startingInventory`, nothing missing. Vaan keeps his Dagger, Leather Cap and Leather Clothing (his starting licenses cover nothing else). Items only change with "Starting items too". |
 | Party stats | new game | Status screen of the first party members. |
 | Open world | new game | New game, play to the first free roam. Check that Rabanastre exits aren't story-locked and that a key item reward appears where `openWorldRewards` says. Note any crash with the map name. |
 | Skip the prologue | new game | New Game goes straight to Vaan in the Garamsythe Waterway (no opening movie, no Reks). Vaan should be alone in the party with his usual starting gear, and the rat fight and the walk up to Rabanastre should play normally. |

@@ -772,6 +772,15 @@ switch (args[0])
             break;
         }
 
+    case "table":
+        {
+            // table <section>: every record of a battle_pack table as hex, one line each.
+            var bp = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
+            var t = bp.Table(int.Parse(args[1]));
+            for (int i = 0; i < t.Count; i++) Console.WriteLine($"{i,4} {Convert.ToHexString(t.Record(i))}");
+            break;
+        }
+
     case "fields":
         foreach (var e in vbf.Entries.Where(e => e.BlockStart != e.Flags))
         {

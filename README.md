@@ -36,7 +36,7 @@ are never changed.
 | Elemental affinities | yes | not yet |
 | Weapon and armor stats | yes | not yet |
 | License boards, Espers, Quickenings | new game | not yet |
-| Starting equipment and items | new game | not yet |
+| Starting equipment (only gear the character starts licensed for; items optional) | new game | not yet |
 | Party stats (shuffle between the six) | new game | not yet |
 | Skip the prologue (start as Vaan in the Garamsythe Waterway) | new game | not yet |
 | Vaan starts with 99 Potions (test mod) | new game | yes |
@@ -54,7 +54,7 @@ matched against known in-game values before use.
 | Consumable prices | section 18, u16 @0x0A | found from Potion 60 / Hi-Potion 180 / Ether 222 |
 | Magick / technick prices | sections 29 / 30, u16 @0x00 (record i = item 0x3000+i / 0x4000+i) | Cure 200, Vox 300, First Aid 600, Charge 1500 |
 | Equipment | section 13 (record i = item 0x1000+i) | price @0x12, weapon attack @0x1A, armor 0x18/0x19 |
-| Licenses | section 12 (type @0x05) | names: section 61 text table 3 |
+| Licenses | section 12 (type @0x05, starting-license mask @0x07: bit n = party record n, items u16 ×8 @0x08) | names: section 61 text table 3 |
 | Bazaar | section 57 | names: text table 9 |
 | Party starting data | section 16 | gear @0x0A (5 ids), char index @0x14, stats 0x16-0x2B, items @0x58, amounts @0x34, name id @0x30 (text table 8) |
 | Character names (menus) | `menu_command_template.bin` (st2e) ids 180072+ | Vaan, Balthier, Fran, Basch, Ashe, Penelo, guests |

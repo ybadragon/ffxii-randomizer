@@ -30,7 +30,7 @@ public static class SaveImpacts
         ["skipprologue"] = new(SaveImpact.NewGameOnly, "The prologue only plays at the start of a new game. Saves aren't affected."),
         ["potions"] = new(SaveImpact.NewGameOnly, "Starting items are given when you start a new game."),
         ["pstats"] = new(SaveImpact.NewGameOnly, "Party stats are copied into your save when a character joins."),
-        ["startinv"] = new(SaveImpact.NewGameOnly, "Starting gear and items are given when a character joins."),
+        ["startinv"] = new(SaveImpact.NewGameOnly, "Starting gear (and items, if ticked) is given when a character joins."),
         ["boards"] = new(SaveImpact.NewGameOnly, "Licenses you have already learned are stored in your save."),
         ["espers"] = new(SaveImpact.NewGameOnly, "Licenses you have already learned are stored in your save."),
         ["quickenings"] = new(SaveImpact.NewGameOnly, "Licenses you have already learned are stored in your save."),

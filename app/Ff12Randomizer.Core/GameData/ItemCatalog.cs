@@ -34,7 +34,13 @@ public sealed class ItemCatalog
     public ItemInfo? Find(ushort id) => _byId.GetValueOrDefault(id);
 
     /// <summary>A readable name for any id, including ones not in the catalog.</summary>
-    public string NameOf(ushort id) => Find(id)?.Name ?? $"Unknown {id:X4}";
+    public string NameOf(ushort id) => Find(id)?.Name ?? GameNames?.Invoke(id) ?? $"Unknown {id:X4}";
+
+    /// <summary>
+    /// Names for ids items.csv lacks (guest gear, maps and other key items), from the game's own text. Set by
+    /// <see cref="Randomization.RandomizerEngine"/> for the duration of a run.
+    /// </summary>
+    public Func<ushort, string?>? GameNames { get; set; }
 
     private static ItemCatalog Load()
     {
@@ -85,5 +91,45 @@ internal static class Csv
         }
         fields.Add(current.ToString());
         return fields;
+    }
+}
+
+/// <summary>
+/// Item names from the game's battle text (battle_pack section 61). Each kind of item (the high 4 bits of its id: 0x1xxx
+/// equipment, 0x2xxx loot, 0x8xxx key items...) is named by one text table at index id &amp; 0xFFF. Which table is found
+/// from the data: the one whose entries agree with the most names items.csv already has for that kind.
+/// </summary>
+public sealed class GameItemNames
+{
+    private const int MaxTables = 64;
+    private static readonly string[] Placeholders = ["NOT USED", "J6dRX", "dummy"];
+    private readonly BattlePack _pack;
+    private readonly Dictionary<int, int> _tableByKind = [];
+
+    public GameItemNames(BattlePack pack, ItemCatalog catalog)
+    {
+        _pack = pack;
+        foreach (var kind in catalog.All.GroupBy(i => i.Id >> 12))
+        {
+            int best = -1, bestMatches = 0;
+            for (int t = 0; t < MaxTables; t++)
+            {
+                int matches;
+                try { matches = kind.Count(i => pack.Text(t, i.Id & 0xFFF) == i.Name); }
+                catch (ArgumentOutOfRangeException) { break; }
+                if (matches > bestMatches) (best, bestMatches) = (t, matches);
+            }
+            // Only trust a table that names most of what the catalog knows of this kind.
+            if (best >= 0 && bestMatches * 2 >= kind.Count()) _tableByKind[kind.Key] = best;
+        }
+    }
+
+    public string? NameOf(ushort id)
+    {
+        if (!_tableByKind.TryGetValue(id >> 12, out int table)) return null;
+        string? text = _pack.Text(table, id & 0xFFF);
+        if (text is null) return null;
+        // Things the game never shows (guest-only gear) are marked "NOT USED" and the like in its text.
+        return Placeholders.Any(p => text.StartsWith(p, StringComparison.Ordinal)) ? $"Unnamed {id:X4}" : text;
     }
 }

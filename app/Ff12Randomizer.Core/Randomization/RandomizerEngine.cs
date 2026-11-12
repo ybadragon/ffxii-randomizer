@@ -1,3 +1,4 @@
+using Ff12Randomizer.Core.GameData;
 using System.Text.Json.Nodes;
 using Ff12Randomizer.Core.Randomization.Features;
 using Ff12Randomizer.Core.Vbf;
@@ -45,7 +46,23 @@ public static class RandomizerEngine
     {
         var context = new RandomizerContext(original, settings, seed);
         var enabled = Features.Where(f => f.IsEnabled(settings)).ToList();
-        foreach (var feature in enabled) feature.Apply(context);
+        // Names items.csv lacks come from the battle text this run will install (the open world renames key items).
+        var catalog = ItemCatalog.Instance;
+        (byte[] Data, GameItemNames Names)? names = null;
+        catalog.GameNames = id =>
+        {
+            var data = context.ChangedFiles.GetValueOrDefault(BattlePack.UsPath) ?? (names?.Data ?? original.Extract(original.Find(BattlePack.UsPath)!));
+            if (names?.Data != data) names = (data, new GameItemNames(new BattlePack(data), catalog));
+            return names.Value.Names.NameOf(id);
+        };
+        try
+        {
+            foreach (var feature in enabled) feature.Apply(context);
+        }
+        finally
+        {
+            catalog.GameNames = null;
+        }
         var problems = enabled.SelectMany(f => f.Validate(context)).Distinct().ToList();
         foreach (var (name, bytes) in context.ChangedFiles)
         {

@@ -772,6 +772,20 @@ switch (args[0])
             break;
         }
 
+    case "text":
+        {
+            // text <index>: that entry of every battle_pack text table (section 61), to find which table names what.
+            var bp = new Ff12Randomizer.Core.GameData.BattlePack(vbf.Extract(vbf.Find(Ff12Randomizer.Core.GameData.BattlePack.UsPath)!));
+            int index = Convert.ToInt32(args[1], 16);
+            for (int t = 0; t < 64; t++)
+            {
+                string? s;
+                try { s = bp.Text(t, index); } catch (Exception) { break; }
+                if (s is not null) Console.WriteLine($"table {t,2} [{index:X}]: {s}");
+            }
+            break;
+        }
+
     case "table":
         {
             // table <section>: every record of a battle_pack table as hex, one line each.

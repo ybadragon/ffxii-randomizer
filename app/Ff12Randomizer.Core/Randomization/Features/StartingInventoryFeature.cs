@@ -19,6 +19,7 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
 {
     public const string Id = "startinv";
     public const string ItemsId = "startitems";
+    public const string LicensesId = "startlicenses";
     private const int GearOffset = 0x0A, GearSlots = 5, NameOffset = 0x30, ItemIdsOffset = 0x58, ItemAmountsOffset = 0x34;
 
     /// <summary>An unused item slot (id 0xFFFF, amount 0), or null when all ten are taken.</summary>
@@ -39,6 +40,7 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
         bool sane = context.Settings.IsOn("sane");
         bool keepPotions = context.Settings.IsOn("potions");
         bool swapItems = context.Settings.IsOn(ItemsId);
+        bool giveLicenses = context.Settings.IsOn(LicensesId);
         var rng = context.RngFor(Id);
         var pack = new BattlePack(context.Edit(BattlePack.UsPath));
         var party = pack.Table(BattlePack.PartySection);
@@ -63,11 +65,17 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
             if (!licenses.IsPartyMember(r)) continue;
             var before = party.Record(r).ToArray();
             var record = party.Record(r);
+            var given = new List<string>();
             for (int g = 0; g < GearSlots; g++)
             {
                 ushort id = BinaryPrimitives.ReadUInt16LittleEndian(record[(GearOffset + g * 2)..]);
                 if (catalog.Find(id) is not { Shuffleable: true } original || ClassOf(id) is not { } wanted) continue;
                 var pick = ItemPools.PickLike(rng, gearPool, original, sane, allowed: i => ClassOf(i.Id) == wanted);
+                if (giveLicenses && !licenses.CanStartWith(r, pick.Id) && licenses.Grant(pack, r, pick.Id) is int license)
+                {
+                    // "Give the licenses for it": the member starts with the license, so the piece can be worn.
+                    given.Add(pack.Text(LicenseBoardsFeature.LicenseNamesTable, license) ?? $"License {license}");
+                }
                 if (licenses.CanStartWith(r, pick.Id))
                 {
                     BinaryPrimitives.WriteUInt16LittleEndian(record[(GearOffset + g * 2)..], pick.Id);
@@ -99,6 +107,7 @@ public sealed class StartingInventoryFeature : IRandomizerFeature
                     character = pack.Text(BattlePack.NamesTable, record[NameOffset]) ?? $"Party record {r}",
                     equipment = Gear(record.ToArray()),
                     items = Items(record.ToArray()),
+                    licensesGiven = given.Count > 0 ? given : null,
                     was = new { equipment = Gear(before), items = Items(before) },
                 });
             }
@@ -141,6 +150,7 @@ public sealed class StartingLicenses
 {
     public const int LicenseSection = 12, MaskOffset = 0x07, ItemsOffset = 0x08, ItemSlots = 8;
     private readonly HashSet<ushort> _licensed = [];
+    private readonly Dictionary<ushort, int> _firstLicenseOf = [];
     private readonly Dictionary<int, HashSet<ushort>> _byMember = [];
 
     public static StartingLicenses Read(BattlePack pack)
@@ -154,6 +164,7 @@ public sealed class StartingLicenses
                 .Select(s => BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(ItemsOffset + s * 2)))
                 .Where(id => id != 0xFFFF).ToList();
             result._licensed.UnionWith(items);
+            foreach (var id in items) result._firstLicenseOf.TryAdd(id, i);
             for (int bit = 0; bit < 8; bit++)
             {
                 if ((record[MaskOffset] & (1 << bit)) == 0) continue;
@@ -166,6 +177,24 @@ public sealed class StartingLicenses
 
     /// <summary>Whether party record <paramref name="member"/> is a party member (it starts with some license), not a guest.</summary>
     public bool IsPartyMember(int member) => _byMember.ContainsKey(member);
+
+    /// <summary>
+    /// Makes party record <paramref name="member"/> start with the first license that allows <paramref name="item"/>, by
+    /// setting its bit in that license's starting mask. Returns the license index, or null when none applies.
+    /// </summary>
+    public int? Grant(BattlePack pack, int member, ushort item)
+    {
+        if (member is < 0 or > 7 || !_firstLicenseOf.TryGetValue(item, out int license)) return null;
+        var record = pack.Table(LicenseSection).Record(license);
+        record[MaskOffset] |= (byte)(1 << member);
+        var bytes = record.ToArray();
+        var items = Enumerable.Range(0, ItemSlots)
+            .Select(s => BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(ItemsOffset + s * 2)))
+            .Where(id => id != 0xFFFF);
+        if (!_byMember.TryGetValue(member, out var set)) _byMember[member] = set = [];
+        set.UnionWith(items);
+        return license;
+    }
 
     /// <summary>Whether party record <paramref name="member"/> keeps <paramref name="item"/> if it starts with it.</summary>
     public bool CanStartWith(int member, ushort item) =>

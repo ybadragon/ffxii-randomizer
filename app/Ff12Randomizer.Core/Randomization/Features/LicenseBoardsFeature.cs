@@ -80,26 +80,23 @@ public sealed class LicenseBoardsFeature : IRandomizerFeature
             ShuffleInto(context.RngFor(Quickenings), cells.SelectMany(c => c).Where(c => TypeOf(c.License) == QuickeningType).ToList());
 
         // Spoiler: per board (named by its job), each license that moved and where to (row, column), in the game's names,
-        // with the kind of license before and after; plus a count of kind-to-kind swaps per board.
+        // with the kind of license before and after.
         string Name(ushort id) => pack.Text(LicenseNamesTable, id) ?? $"License {id}";
         var kinds = LicenseKinds.Read(pack);
         var menu = context.Original.Find(MenuCommandPath) is { } entry ? new St2eText(context.Original.Extract(entry)) : null;
         for (int b = 0; b < Boardcount; b++)
         {
             var moved = new List<object>();
-            var swaps = new List<(string From, string To)>();
             for (int i = 0; i < Size * Size; i++)
             {
                 ushort now = BinaryPrimitives.ReadUInt16LittleEndian(boards[b].AsSpan(HeaderSize + i * 2));
                 ushort was = BinaryPrimitives.ReadUInt16LittleEndian(before[b].AsSpan(HeaderSize + i * 2));
-                if (now == was) continue;
+                // Licenses that share a name (ten Gambit Slots, sixteen Battle Lores) trading places changes nothing a player sees.
+                if (now == was || Name(now) == Name(was)) continue;
                 moved.Add(new { row = i / Size + 1, column = i % Size + 1, license = Name(now), kind = kinds.Of(now), was = Name(was), wasKind = kinds.Of(was) });
-                swaps.Add((kinds.Of(was), kinds.Of(now)));
             }
             string? job = menu?[FirstJobNameId + (uint)b];
             if (moved.Count > 0) context.Spoil("licenseBoards", new { board = b + 1, job, changedCells = moved });
-            foreach (var g in swaps.Where(s => s.From != s.To).GroupBy(s => s).OrderByDescending(g => g.Count()).ThenBy(g => g.Key.From))
-                context.Spoil("licenseKindSwaps", new { board = b + 1, job, was = g.Key.From, now = g.Key.To, cells = g.Count() });
         }
     }
 

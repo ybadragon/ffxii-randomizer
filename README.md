@@ -26,7 +26,7 @@ are never changed.
 
 | Option | Works on existing saves | Confirmed in game |
 | --- | --- | --- |
-| Open world (Bartz24's base, experimental) | new game | boots to the title screen; play untested |
+| Open world (Bartz24's base, experimental) | new game | **broken**: black screen when leaving Rabanastre for the Estersand |
 | Treasure chests (shuffle/randomize, gil amounts) | yes, unopened chests | yes |
 | Shops (shuffle/randomize) | yes | yes |
 | Shop prices (consumables, equipment) | yes | not yet |

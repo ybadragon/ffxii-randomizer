@@ -42,6 +42,7 @@ public static class RandomizerEngine
         new SkipPrologueFeature(),
         new EnemySwapExperiment(),
         new EnemyLocationsFeature(),
+        new OpenGatesExperiment(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

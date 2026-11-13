@@ -43,19 +43,34 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
         (settings.IsOn(Id) || settings.IsOn(FreeRoamId)) && !settings.IsOn(OpenWorldFeature.Id);
 
     /// <summary>The code written over the new game branch: the prologue's ending, changed for free roam when that is on.</summary>
-    private static byte[] StartCode(RandomizerSettings settings, byte[] ending)
+    private static byte[] StartCode(RandomizerSettings settings, byte[] ending, byte[] normalEntry)
     {
         if (!settings.IsOn(FreeRoamId)) return ending;
         // ending = PUSHII flag; POPV flag; PUSHII 1; CALLPOPA (party data switch); then the three PUSHIIs and the mapjump.
+        // Test switches (CLI): exp_noflag keeps the prologue's own story flag, exp_noparty adds nobody, exp_sewer keeps the
+        // prologue's own destination.
         var code = new List<byte>(ending[..12]);
-        code[1] = FreeRoamStoryFlag & 0xFF;
-        code[2] = (byte)(FreeRoamStoryFlag >> 8);
-        for (byte member = 1; member <= 5; member++)
+        if (!settings.IsOn("exp_noflag"))
+        {
+            // exp_flag=<hex> tries another story flag value.
+            int flag = settings.Choices.TryGetValue("exp_flag", out string? text) ? Convert.ToInt32(text, 16) : FreeRoamStoryFlag;
+            code[1] = (byte)flag;
+            code[2] = (byte)(flag >> 8);
+        }
+        if (settings.IsOn("exp_sewer") && settings.IsOn("exp_noparty")) return [.. code, .. ending[12..]];
+        for (byte member = 1; member <= 5 && !settings.IsOn("exp_noparty"); member++)
             code.AddRange([PushII, member, 0, CallPopA, AddPartyMemberCall & 0xFF, AddPartyMemberCall >> 8]);
         // The waterway map of the prologue's ending is a story-only map and never finishes loading this late in the story,
         // so free roam starts in Rabanastre instead: PUSHII map; PUSHII entrance; then the ending's own mode and mapjump.
-        code.AddRange([PushII, FreeRoamStartMap & 0xFF, FreeRoamStartMap >> 8, PushII, 0, 0]);
-        code.AddRange(ending[18..]);
+        // The prologue map starts with control, menu and battles off and the screen dark, and later in the story no scene
+        // turns them back on. Its own "entered normally" code does, so that runs before the jump (exp_norestore: not).
+        if (!settings.IsOn("exp_norestore")) code.AddRange(normalEntry);
+        if (settings.IsOn("exp_sewer")) code.AddRange(ending[12..18]);
+        else code.AddRange([PushII, FreeRoamStartMap & 0xFF, FreeRoamStartMap >> 8, PushII, 0, 0]);
+        // Mapjump mode 0, as normal map exits use: the ending's own mode 1 leaves the fade-in to the story scene of the
+        // destination, and there is none this late (exp_mode=<n> tries another).
+        byte mode = settings.Choices.TryGetValue("exp_mode", out string? text2) ? byte.Parse(text2) : (byte)0;
+        code.AddRange([PushII, mode, 0, .. ending[21..]]);
         return code.ToArray();
     }
 
@@ -64,7 +79,7 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
         var ending = PrologueEnding.Find(context.Original.Extract(context.Original.Find(LastMapPath)!));
         var script = context.Edit(FirstMapPath);
         var branch = NewGameBranch.Find(script);
-        branch.Replace(script, StartCode(context.Settings, ending.Code));
+        branch.Replace(script, StartCode(context.Settings, ending.Code, branch.NormalEntry), exact: !context.Settings.IsOn(FreeRoamId));
 
         var names = new MapNames(context.Original);
         string? mapId = MapNames.IdOf(context.Settings.IsOn(FreeRoamId) ? FreeRoamStartMap : ending.MapNumber);
@@ -82,7 +97,8 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
     {
         if (!context.ChangedFiles.TryGetValue(FirstMapPath, out var script)) yield break;
         var ending = PrologueEnding.Find(context.Original.Extract(context.Original.Find(LastMapPath)!));
-        if (!NewGameBranch.Find(script).StartsWith(script, StartCode(context.Settings, ending.Code)))
+        var found = NewGameBranch.Find(script);
+        if (!found.StartsWith(script, StartCode(context.Settings, ending.Code, found.NormalEntry)))
             yield return "Skip prologue: the new game branch in naf_a01 doesn't start with the prologue's ending.";
     }
 
@@ -122,7 +138,7 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
     /// "PUSHV progress; PUSHII 10; OPLS; POPXNCJMP else" before it. The branch ends with "JMP end", end being the label
     /// after the else label.
     /// </summary>
-    private sealed record NewGameBranch(int BodyStart, int BodyEnd, byte[] CloseJump)
+    private sealed record NewGameBranch(int BodyStart, int BodyEnd, byte[] CloseJump, byte[] NormalEntry)
     {
         public static NewGameBranch Find(byte[] b)
         {
@@ -153,16 +169,34 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
                 if (Is(b, p, Jmp, (ushort)(elseLabel + 1))) { close = p; break; }
             }
             if (close < 0) throw new InvalidDataException("Skip prologue: the end of naf_a01's new game branch wasn't found.");
-            return new NewGameBranch(body, close + 3, b[close..(close + 3)]);
+            // The else branch ("entered normally") ends with: ucon; sethpmenu(1); ... resumebattle; fadein(fadesystemtime());
+            // fadesync; RET. Everything from ucon (call 0x000D) up to the fadesync (0x00B9) is the normal entry code.
+            int ucon = -1, sync = -1;
+            for (int p = close + 3; p + 4 <= b.Length && sync < 0; p++)
+            {
+                if (ucon < 0 && Is(b, p, CallPopA, 0x000D)) ucon = p;
+                if (ucon >= 0 && Is(b, p, CallPopA, 0x00B9) && b[p + 3] == 0x2D) sync = p;
+            }
+            if (ucon < 0 || sync < 0 || (sync - ucon) % 3 != 0 || sync - ucon > 90)
+                throw new InvalidDataException("Skip prologue: naf_a01's normal entry code wasn't found.");
+            return new NewGameBranch(body, close + 3, b[close..(close + 3)], b[ucon..sync]);
         }
 
         /// <summary>
         /// Writes <paramref name="code"/> and the closing jump at the start of the branch. The rest of the statement it
         /// lands in is filled with more copies of the jump, so the leftover code starts on a whole statement.
         /// </summary>
-        public void Replace(byte[] b, byte[] code)
+        public void Replace(byte[] b, byte[] code, bool exact = true)
         {
             int length = code.Length + CloseJump.Length;
+            if (!exact)
+            {
+                // Longer code (the free roam experiment): written as is. What is left of the branch after it never runs.
+                if (BodyStart + length > BodyEnd) throw new InvalidDataException("Skip prologue: the new start code doesn't fit.");
+                code.CopyTo(b, BodyStart);
+                CloseJump.CopyTo(b, BodyStart + code.Length);
+                return;
+            }
             // The overwritten instructions must be whole 3-byte PUSHII/CALLPOPA ones; stop at the end of the first call
             // at or past the patch, so no call is left without its arguments.
             int end = BodyStart;

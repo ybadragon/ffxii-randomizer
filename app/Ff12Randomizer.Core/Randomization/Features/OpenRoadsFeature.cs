@@ -4,7 +4,7 @@ using Ff12Randomizer.Core.GameData;
 namespace Ff12Randomizer.Core.Randomization.Features;
 
 /// <summary>
-/// Our own open world, stage by stage (CLI toggle "exp_openroads" until it is confirmed in game): roads the story keeps
+/// Our own open world (the World tab's "Open world"): roads the story keeps
 /// closed are open from the start, while the story itself still advances in order.
 /// <para>The game closes a road with a comparison in the map's script: a guard, door or exit that only works once the
 /// story flag has reached some value, or a state variable set to "closed". data/opengates.csv lists each one: the map
@@ -17,7 +17,7 @@ namespace Ff12Randomizer.Core.Randomization.Features;
 /// </summary>
 public sealed class OpenRoadsFeature : IRandomizerFeature
 {
-    public const string Id = "exp_openroads";
+    public const string Id = "openworld";
     private const ushort TeleportStatusCall = 0x0305;
 
     public bool IsEnabled(RandomizerSettings settings) => settings.IsOn(Id) && !settings.IsOn(OpenWorldFeature.Id);

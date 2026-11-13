@@ -40,7 +40,7 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
     private const ushort FreeRoamStartMap = 0x0130; // rbn_a16, entrance 0
 
     public bool IsEnabled(RandomizerSettings settings) =>
-        (settings.IsOn(Id) || settings.IsOn(FreeRoamId)) && !settings.IsOn(OpenWorldFeature.Id);
+        (settings.IsOn(Id) || settings.IsOn(FreeRoamId) || settings.IsOn(OpenRoadsFeature.Id)) && !settings.IsOn(OpenWorldFeature.Id);
 
     /// <summary>The code written over the new game branch: the prologue's ending, changed for free roam when that is on.</summary>
     private static byte[] StartCode(RandomizerSettings settings, byte[] ending, byte[] normalEntry)

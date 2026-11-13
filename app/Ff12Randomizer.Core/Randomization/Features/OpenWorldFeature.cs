@@ -20,7 +20,7 @@ namespace Ff12Randomizer.Core.Randomization.Features;
 /// </summary>
 public sealed class OpenWorldFeature : IRandomizerFeature
 {
-    public const string Id = "openworld";
+    public const string Id = "exp_bartzopenworld";
     public const string HuntRewardsLoaderFeature = "hunt_rewards";
     public const int RewardsSection = 37, RewardSize = 0xC;
     public const int PricesSection = 28, PartyOrderRecord = 0x76, StartingBoardsRecord = 0x77;

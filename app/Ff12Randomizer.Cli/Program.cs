@@ -31,7 +31,7 @@ if (args[0] == "owoverride")
     var patcher = new Ff12Randomizer.Core.Patching.PatchManager(game);
     var archive = patcher.OpenOriginal();
     var settings = Ff12Randomizer.Core.Randomization.RandomizerSettings.Defaults();
-    settings.Toggles["openworld"] = true;
+    settings.Toggles[Ff12Randomizer.Core.Randomization.Features.OpenWorldFeature.Id] = true;
     foreach (string id in args.Skip(3))
     {
         if (id.Split('=') is [var key, var value]) settings.Choices[key] = value; else settings.Toggles[id] = true;

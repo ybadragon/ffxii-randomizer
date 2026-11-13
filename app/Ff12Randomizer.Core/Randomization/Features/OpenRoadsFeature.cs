@@ -95,6 +95,13 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
                     context.Spoil("openRoads", new { place = gate.Note, map = gate.Map, waitsFor = lo });
                     continue;
                 }
+                if (gate.Kind == "equals")
+                {
+                    // The comparison becomes "flag == NewValue" in place, for a scene whose window only holds story steps it writes itself.
+                    foreach (int at in sites) script.SetEquals(at, gate.NewValue);
+                    context.Spoil("openRoads", new { place = gate.Note, map = gate.Map, waitsFor = gate.NewValue });
+                    continue;
+                }
                 if (gate.Kind is "range" or "caserange")
                 {
                     // A scene that plays whenever the story is before N gets a lower bound: the story value when it normally
@@ -104,13 +111,15 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
                     // the map's first write would be wrong); otherwise it is the step before the smallest value this map writes.
                     short lo = gate.NewValue != 0 ? gate.NewValue
                         : steps!.GetViewBetween(short.MinValue, (short)(script.StoryWrites().Select(w => w.Value).Where(v => v > 0).Min() - 1)).Max;
+                    // "<= N" is "< N + 1".
+                    short limit = gate.Compare.EndsWith("<=") ? (short)(gate.Value + 1) : gate.Value;
                     foreach (int at in sites)
                     {
-                        if (OnlyStep(steps, lo, gate.Value)) script.SetEquals(at, lo);
+                        if (OnlyStep(steps, lo, limit)) script.SetEquals(at, lo);
                         else if (gate.Kind == "range")
                             editor.Insert(at + 4, [MapScript.PushV, .. U16(script.StoryFlag), MapScript.PushII, .. U16((ushort)lo), OpGte, OpLAnd], 4, true);
                         else
-                            editor.Replace(at, 6, [MapScript.PushII, .. U16((ushort)lo), MapScript.PushII, .. U16((ushort)(gate.Value - 1)), CaseBetween, bytes[at + 4], bytes[at + 5]], 1);
+                            editor.Replace(at, 6, [MapScript.PushII, .. U16((ushort)lo), MapScript.PushII, .. U16((ushort)(limit - 1)), CaseBetween, bytes[at + 4], bytes[at + 5]], 1);
                     }
                     context.Spoil("openRoads", new { place = gate.Note, map = gate.Map, waitsFor = lo });
                     continue;
@@ -135,7 +144,7 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
     private static string ActorName(string actor) => actor.Contains('#') ? actor[..actor.IndexOf('#')] : actor;
 
     /// <summary>True when no story step lies strictly between lo and n, so the story can only be at lo in that window.</summary>
-    private static bool OnlyStep(SortedSet<short> steps, short lo, short n) => steps.GetViewBetween((short)(lo + 1), (short)(n - 1)).Count == 0;
+    private static bool OnlyStep(SortedSet<short> steps, short lo, short n) => lo + 1 > n - 1 || steps.GetViewBetween((short)(lo + 1), (short)(n - 1)).Count == 0;
 
     /// <summary>The first setsaveramtelepostatus(0) of the boot script (story values below 105) becomes (1).</summary>
     private static void TeleportFromTheStart(RandomizerContext context, string path)

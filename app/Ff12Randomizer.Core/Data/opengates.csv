@@ -43,3 +43,59 @@ Stage,Map,Actor,Variable,Kind,Compare,Value,NewValue,Count,Note
 2,rwg_b01,常駐ディレクター,0000:3000,check,>=,0,1360,1,Tomb of Raithwall: the Demon Wall scene waits for its turn in the story
 2,rwg_b01,setup,0000:3000,check,>=,0,1360,1,Tomb of Raithwall: the Demon Wall scene waits for its turn in the story
 2,rwg_b02,Map_Director#2,0000:3000,range,<,1372,,2,Tomb of Raithwall: the second Demon Wall appears only at its point in the story
+4,frs_d01,門監督,0000:3000,check,case <,3070,0,1,Salikawood: the great gate to Phon Coast stands open from the start
+4,frs_d01,Map_Director,0000:3000,check,case <,3070,0,1,Salikawood: the great gate to Phon Coast stands open from the start
+4,fon_b01,監督,0000:3000,range,<=,3070,3070,2,Phon Coast: the hunters' camp scene waits for its turn in the story
+4,fon_b01,イベント起動01,0000:3000,range,<=,3070,3070,1,Phon Coast: the hunters' camp scene waits for its turn in the story
+4,fon_b01,イベント起動02,0000:3000,range,<=,3070,3070,1,Phon Coast: the hunters' camp scene waits for its turn in the story
+4,fon_b01,イベント起動03,0000:3000,range,<=,3070,3070,1,Phon Coast: the hunters' camp scene waits for its turn in the story
+4,pla_a05,Map_Director,0000:3000,check,case <,4147,0,1,Tchita Uplands: the way to the Cerobi Steppe is clear from the start
+4,pla_a05,通行禁止１,0000:3000,check,<,4147,0,1,Tchita Uplands: nobody turns chocobo riders back from the Cerobi Steppe
+4,pla_a01,Map_Director,0000:3000,check,case <,4147,0,1,Tchita Uplands: the way to the Cerobi Steppe looks clear from the start
+4,var_a01,EventDirector,0000:3000,check,<=,4000,0,1,Balfonheim Port: the gate to the Cerobi Steppe is open from the start
+4,var_a01,EventDirector,0000:3000,check,>,4000,0,1,Balfonheim Port: the gate to the Cerobi Steppe is open from the start
+4,var_a04,EventDirector,0000:3000,caserange,case <,4150,4147,1,Balfonheim Port: the scene with Reddas waits for its turn in the story
+4,rui_a04,監督,0000:3000,write,=,3120,3100,1,Sochen Cave Palace: the arrival scene never stops halfway (its save point keeps the story where it was)
+4,rui_a04,監督,0000:3000,equals,<,3130,3100,2,Sochen Cave Palace: the arrival scene waits for its turn in the story
+4,ald_a02,setup,0000:3000,range,<,3210,,1,Old Archades: the arrival scene waits for its turn in the story
+4,ald_a02,EventDirector,0000:3000,range,<,3210,,1,Old Archades: the arrival scene waits for its turn in the story
+4,ald_a01,EventDirector#1,0000:3000,check,<,3220,0,4,Old Archades: the way into Archades is open from the start
+4,ald_a01,EventDirector#2,0000:3000,check,<,3220,0,4,Old Archades: the soldiers no longer block the way into Archades
+4,ald_a01,NPC_SOLDIER_A,0000:3000,check,>=,3220,0,1,Old Archades: the soldiers no longer block the way into Archades
+4,ald_a01,NPC_SOLDIER_B,0000:3000,check,>=,3220,0,1,Old Archades: the soldiers no longer block the way into Archades
+4,ald_a01,NPC_JULES,0000:3000,range,<,3220,,1,Old Archades: Jules leads you to the imperial city only at his point in the story
+4,alc_b04,setup,0000:3000,range,<,3250,,1,Archades: the arrival scene waits for its turn in the story
+4,alc_b04,EventDirector,0000:3000,caserange,case <,3250,,1,Archades: the arrival scene waits for its turn in the story
+4,alc_b04,EventDirector,0000:3000,caserange,case <,3253,3250,1,Archades: the soldiers stand guard only at their point in the story
+4,alc_b04,RECT_SPLIT_BAL,0000:3000,range,<,3253,3250,1,Archades: Balthier's scene waits for its turn in the story
+4,alc_f01,EventDirector,0000:3000,range,<,3255,,1,Archades: the taxi scene with Jules waits for its turn in the story
+4,alc_f01,SAKIYOMI_ev_alc_a0280,0000:3000,range,<,3255,,1,Archades: the taxi scene with Jules waits for its turn in the story
+4,alc_f01,NPC_JULES,0000:3000,range,<,3255,,2,Archades: the taxi scene with Jules waits for its turn in the story
+4,alc_f01,NPC_タクシー受付#2,0000:3000,range,<,3255,,2,Archades: the taxi scene with Jules waits for its turn in the story
+4,mfr_a04,Map_Director,0000:3000,check,case <,4100,0,1,Feywood: the way in is open from the start
+4,mfr_a04,Map_Director,0000:3000,check,case <,4160,0,1,Feywood: the way in is open from the start
+4,mfr_a04,__MJ_CTRL002,0000:3000,check,case <,4100,0,1,Feywood: the way in is open from the start
+4,mfr_a04,__MJ_CTRL002,0000:3000,check,case <,4160,0,1,Feywood: the way in is open from the start
+4,mfr_a04,進入不可,0000:3000,check,<,4100,0,1,Feywood: the way in is open from the start
+4,mfr_b01,Map_Director,0000:3000,check,<,4200,0,1,Feywood: the mist no longer closes the way on
+4,mfr_c03,gil_gate,0000:3000,range,<,4250,,1,Feywood: Belias opens the gate to Giruvegan only at his point in the story
+4,gil_a01,setup,0000:3000,range,<,4250,,1,Giruvegan: the arrival scene waits for its turn in the story
+4,gil_a01,EventDirector,0000:3000,range,<,4250,,1,Giruvegan: the arrival scene waits for its turn in the story
+4,gil_a02,EventDirector,0000:3000,range,<,4295,,1,Giruvegan: Daedalus appears only at his point in the story
+4,gil_a02,EventDirector#1,0000:3000,equals,<,4300,4250,3,Giruvegan: Daedalus appears only at his point in the story
+4,gil_a02,EventDirector#3,0000:3000,equals,<,4300,4250,3,Giruvegan: Daedalus appears only at his point in the story
+4,gil_a02,ボス登場,0000:3000,range,<,4295,,1,Giruvegan: Daedalus appears only at his point in the story
+4,gil_c01,EventDirector,0000:3000,range,<,4320,,1,Giruvegan: the scene waits for its turn in the story
+4,gil_g10,EventDirector,0000:3000,range,<,4370,,1,Giruvegan: the scene waits for its turn in the story
+4,mnt_d01,uki00_mnt0104a,0000:3000,check,>=,3070,0,2,Mosphoran Highwaste: the moogles' floating platforms work from the start
+4,mnt_d01,uki01_mnt0104b,0000:3000,check,>=,3070,0,2,Mosphoran Highwaste: the moogles' floating platforms work from the start
+4,mnt_d01,uki02_mnt0105a,0000:3000,check,>=,3070,0,2,Mosphoran Highwaste: the moogles' floating platforms work from the start
+4,mnt_d01,uki03_mnt0105b,0000:3000,check,>=,3070,0,2,Mosphoran Highwaste: the moogles' floating platforms work from the start
+4,mnt_d01,uki04_mnt0106a,0000:3000,check,>=,3070,0,2,Mosphoran Highwaste: the moogles' floating platforms work from the start
+4,mnt_d01,uki05_mnt0106a,0000:3000,check,>=,3070,0,2,Mosphoran Highwaste: the moogles' floating platforms work from the start
+4,pre_z0000,制御#2,0000:3000,check,>=,0,4320,2,Giruvegan: Tyrant appears only at its point in the story
+4,mfr_b01,EventDirector,0A0D:0000,window,==,1,4200,2,Feywood: Rafflesia appears only at its point in the story
+4,gil_a02,ボス登場#2,0A09:0000,window,==,1,4300,2,Giruvegan: Daedalus appears only at his point in the story
+4,gil_d01,EventDirector#1,0000:3000,equals,<,5000,4370,3,Giruvegan: Shemhazai appears only at her point in the story
+4,gil_d01,EventDirector#3,0000:3000,equals,<,5000,4370,3,Giruvegan: Shemhazai appears only at her point in the story
+4,gil_d01,ボス登場,0000:3000,equals,<,5000,4370,1,Giruvegan: Shemhazai appears only at her point in the story

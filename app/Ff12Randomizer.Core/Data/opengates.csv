@@ -18,7 +18,7 @@ Stage,Map,Actor,Variable,Kind,Compare,Value,NewValue,Count,Note
 2,wdl_a06,Map_Director,0000:3000,check,>=,1180,0,1,Westersand: exit to the Ogir-Yensa Sandsea
 2,ene_a01,ムービーレクト,0000:3000,range,<,1270,,2,Ogir-Yensa Sandsea: the arrival scene waits for its turn in the story
 2,ene_a01,SAKIYOMI_ene_a0180,0000:3000,range,<,1270,,1,Ogir-Yensa Sandsea: the arrival scene waits for its turn in the story
-2,ene_a02,EventDirector,0000:3000,caserange,case <,1330,,1,Ogir-Yensa Sandsea: Larsa joins only at his point in the story
+2,ene_a02,EventDirector,0000:3000,caserange,case <,1330,,1,Ogir-Yensa Sandsea: Vossler joins (as a guest) only at his point in the story
 2,enw_a03,EventDirector,0000:3000,range,<,1338,,1,Nam-Yensa Sandsea: the scene waits for its turn in the story
 2,enw_a05,EventDirector,0000:3000,range,<,1338,,1,Nam-Yensa Sandsea: the scene waits for its turn in the story
 2,rwg_a01,setup,0000:3000,range,<,1345,,1,Tomb of Raithwall: the arrival scene waits for its turn in the story

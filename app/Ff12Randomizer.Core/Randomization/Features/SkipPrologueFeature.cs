@@ -58,15 +58,30 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
             code[2] = (byte)(flag >> 8);
         }
         if (settings.IsOn("exp_sewer") && settings.IsOn("exp_noparty")) return [.. code, .. ending[12..]];
-        for (byte member = 1; member <= 5 && !settings.IsOn("exp_noparty"); member++)
-            code.AddRange([PushII, member, 0, CallPopA, AddPartyMemberCall & 0xFF, AddPartyMemberCall >> 8]);
+        if (!settings.IsOn("exp_noparty"))
+        {
+            // The party data switch resets the party at the next map load, which undid members added here (seen in game:
+            // only Vaan). So without it (exp_switch keeps it): all six join, Reks (record 6) leaves, and the first three
+            // are the active party: addpartymember 0x0353, removepartymember 0x0354, setbattlemember 0x0355.
+            if (!settings.IsOn("exp_switch")) code.RemoveRange(6, 6);
+            // Reks leaves right after Vaan joins: with him still in, the sixth member didn't fit (seen in game: no Penelo).
+            for (byte member = 0; member <= 5; member++)
+            {
+                code.AddRange([PushII, member, 0, CallPopA, 0x53, 0x03]);
+                if (member == 0) code.AddRange([PushII, 6, 0, CallPopA, 0x54, 0x03]);
+            }
+            code.AddRange([PushII, 0, 0, PushII, 1, 0, PushII, 2, 0, CallPopA, 0x55, 0x03]);
+        }
         // The waterway map of the prologue's ending is a story-only map and never finishes loading this late in the story,
         // so free roam starts in Rabanastre instead: PUSHII map; PUSHII entrance; then the ending's own mode and mapjump.
         // The prologue map starts with control, menu and battles off and the screen dark, and later in the story no scene
         // turns them back on. Its own "entered normally" code does, so that runs before the jump (exp_norestore: not).
         if (!settings.IsOn("exp_norestore")) code.AddRange(normalEntry);
+        // exp_map=<hex> and exp_entry=<n> start somewhere else, to test an area directly.
+        int map = settings.Choices.TryGetValue("exp_map", out string? mapText) ? Convert.ToInt32(mapText, 16) : FreeRoamStartMap;
+        byte entry = settings.Choices.TryGetValue("exp_entry", out string? entryText) ? byte.Parse(entryText) : (byte)0;
         if (settings.IsOn("exp_sewer")) code.AddRange(ending[12..18]);
-        else code.AddRange([PushII, FreeRoamStartMap & 0xFF, FreeRoamStartMap >> 8, PushII, 0, 0]);
+        else code.AddRange([PushII, (byte)map, (byte)(map >> 8), PushII, entry, 0]);
         // Mapjump mode 0, as normal map exits use: the ending's own mode 1 leaves the fade-in to the story scene of the
         // destination, and there is none this late (exp_mode=<n> tries another).
         byte mode = settings.Choices.TryGetValue("exp_mode", out string? text2) ? byte.Parse(text2) : (byte)0;

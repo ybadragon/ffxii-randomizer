@@ -1,0 +1,16 @@
+Stage,Map,Actor,Variable,Kind,Compare,Value,NewValue,Count,Note
+1,rbn_a04,Map_Director,0000:3000,check,>=,100,0,1,Rabanastre: doors to the three gate plazas are usable from the start
+1,rbn_a04,map東門,0000:3000,check,>=,100,0,2,Door to the East Gate plaza
+1,rbn_a04,map南門,0000:3000,check,>=,100,0,2,Door to the South Gate plaza
+1,rbn_a04,map西門,0000:3000,check,>=,100,0,2,Door to the West Gate plaza
+1,rbn_a17,Map_Director,0000:3000,check,>=,100,0,1,East Gate plaza: the gate back into the city
+1,rbn_a17,gate_east,0000:3000,check,>=,100,0,2,East Gate plaza: the gate back into the city
+1,rbn_a18,mapダウンタウン扉,0000:3000,check,>=,100,0,2,South Gate plaza: door to Lowtown
+1,rbn_a01,mapダウンタウン扉,0000:3000,check,<,100,0,1,Rabanastre: door to Lowtown
+1,rbn_a03,mapダウンタウン扉,0000:3000,check,<,100,0,1,Rabanastre: door to Lowtown
+1,slm_a02,big_door_03,0000:3000,check,>=,100,0,2,Lowtown: door to the South Gate plaza
+1,dst_a07,通行禁止監督,0000:3000,check,case <,105,0,1,Estersand village: the guard who blocks the way north
+1,dst_a07,Map_Director,0000:3000,check,<,105,0,1,Estersand village: exit north
+1,dst_a02,Map_Director,0000:3000,check,<,105,0,1,Estersand: exit toward the village
+1,pre_z0000,制御,040A:0000,write,=,2,0,1,Rabanastre road closure state is never set to closed (boot script)
+1,rbn_a03,,040A:0000,write,=,2,0,1,Rabanastre road closure state is never set to closed (Penelo scene)

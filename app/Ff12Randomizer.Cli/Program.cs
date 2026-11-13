@@ -799,6 +799,30 @@ switch (args[0])
             break;
         }
 
+    case "scriptvars":
+        {
+            // scriptvars <map script name>: the script's variable table (header 0x28): index, two u16s and a u32 each.
+            string vp = vbf.Entries.First(e => e.Name.Contains("/us/") && e.Name.EndsWith("/" + args[1] + ".ebp")).Name;
+            var eb = vbf.Extract(vbf.Find(vp)!);
+            int sc = (int)BinaryPrimitives.ReadUInt32LittleEndian(eb.AsSpan(0x10));
+            int vt = sc + (int)BinaryPrimitives.ReadUInt32LittleEndian(eb.AsSpan(sc + 0x28));
+            int vn = (int)BinaryPrimitives.ReadUInt32LittleEndian(eb.AsSpan(vt));
+            for (int i = 0; i < Math.Min(vn, 12); i++)
+                Console.WriteLine($"{i}: {BinaryPrimitives.ReadUInt16LittleEndian(eb.AsSpan(vt + 4 + i * 8)):X4} {BinaryPrimitives.ReadUInt16LittleEndian(eb.AsSpan(vt + 6 + i * 8)):X4} {BinaryPrimitives.ReadUInt32LittleEndian(eb.AsSpan(vt + 8 + i * 8)):X8}");
+            break;
+        }
+
+    case "storychecks":
+        {
+            // storychecks <map script name>: every story flag comparison and assignment in that map's script, by actor.
+            string mapPath = vbf.Entries.First(e => e.Name.Contains("/us/") && e.Name.EndsWith("/" + args[1] + ".ebp")).Name;
+            var ms = new Ff12Randomizer.Core.GameData.MapScript(vbf.Extract(vbf.Find(mapPath)!));
+            foreach (var g in ms.StoryChecks().GroupBy(c => (c.Actor, c.Compare, c.Value)))
+                Console.WriteLine($"{g.Key.Actor}: flag {g.Key.Compare} {g.Key.Value} (0x{g.Key.Value:X}) x{g.Count()}");
+            foreach (var w in ms.StoryWrites()) Console.WriteLine($"{w.Actor}: flag = {w.Value} (0x{w.Value:X})");
+            break;
+        }
+
     case "table":
         {
             // table <section>: every record of a battle_pack table as hex, one line each.

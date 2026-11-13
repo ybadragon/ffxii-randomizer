@@ -29,14 +29,38 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
     private const ushort StoryFlagVariable = 0x0000; // savemem short 0x00 (シナリオフラグ), as both scripts address it
     private const ushort MapJumpCall = 0x008D;
 
-    public bool IsEnabled(RandomizerSettings settings) => settings.IsOn(Id) && !settings.IsOn(OpenWorldFeature.Id);
+    /// <summary>
+    /// Experiment (CLI only), step 2 of our own open world: the new game also starts late in the story, so every area is
+    /// open the way it is at the end of the game. The story flag becomes 0x17D4, the game's own free roam state before the
+    /// point of no return (the value its "board the Bahamut?" scenes set), and the other five party members join
+    /// (addpartymember, call 0x0353, for party records 1 to 5).
+    /// </summary>
+    public const string FreeRoamId = "exp_freeroam";
+    private const ushort FreeRoamStoryFlag = 0x17D4, AddPartyMemberCall = 0x0353;
+
+    public bool IsEnabled(RandomizerSettings settings) =>
+        (settings.IsOn(Id) || settings.IsOn(FreeRoamId)) && !settings.IsOn(OpenWorldFeature.Id);
+
+    /// <summary>The code written over the new game branch: the prologue's ending, changed for free roam when that is on.</summary>
+    private static byte[] StartCode(RandomizerSettings settings, byte[] ending)
+    {
+        if (!settings.IsOn(FreeRoamId)) return ending;
+        // ending = PUSHII flag; POPV flag; PUSHII 1; CALLPOPA (party data switch); then the three PUSHIIs and the mapjump.
+        var code = new List<byte>(ending[..12]);
+        code[1] = FreeRoamStoryFlag & 0xFF;
+        code[2] = (byte)(FreeRoamStoryFlag >> 8);
+        for (byte member = 1; member <= 5; member++)
+            code.AddRange([PushII, member, 0, CallPopA, AddPartyMemberCall & 0xFF, AddPartyMemberCall >> 8]);
+        code.AddRange(ending[12..]);
+        return code.ToArray();
+    }
 
     public void Apply(RandomizerContext context)
     {
         var ending = PrologueEnding.Find(context.Original.Extract(context.Original.Find(LastMapPath)!));
         var script = context.Edit(FirstMapPath);
         var branch = NewGameBranch.Find(script);
-        branch.Replace(script, ending.Code);
+        branch.Replace(script, StartCode(context.Settings, ending.Code));
 
         var names = new MapNames(context.Original);
         string? mapId = MapNames.IdOf(ending.MapNumber);
@@ -44,9 +68,9 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
         string? region = mapId is null ? null : names.RegionOf(mapId);
         context.Spoil("newGame", new
         {
-            change = "Prologue skipped",
+            change = context.Settings.IsOn(FreeRoamId) ? "Prologue skipped; free roam start (late story, full party)" : "Prologue skipped",
             startsAt = string.Join(", ", new[] { region, place }.OfType<string>().Distinct()),
-            storyFlag = ending.StoryFlag,
+            storyFlag = context.Settings.IsOn(FreeRoamId) ? FreeRoamStoryFlag : ending.StoryFlag,
         });
     }
 
@@ -54,7 +78,7 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
     {
         if (!context.ChangedFiles.TryGetValue(FirstMapPath, out var script)) yield break;
         var ending = PrologueEnding.Find(context.Original.Extract(context.Original.Find(LastMapPath)!));
-        if (!NewGameBranch.Find(script).StartsWith(script, ending.Code))
+        if (!NewGameBranch.Find(script).StartsWith(script, StartCode(context.Settings, ending.Code)))
             yield return "Skip prologue: the new game branch in naf_a01 doesn't start with the prologue's ending.";
     }
 

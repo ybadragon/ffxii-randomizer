@@ -62,16 +62,21 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
             if (!paths.TryGetValue(map.Key, out string? path)) throw new InvalidDataException($"Open roads: no script named {map.Key}.");
             byte[] bytes = context.Edit(path);
             var script = new MapScript(bytes);
+            // Rows match against the original script, so one row's edit doesn't hide another row's site (in-place edits keep offsets).
+            var original = new MapScript(context.Original.Extract(context.Original.Find(path)!));
             var editor = new ScriptEditor(bytes);
             foreach (var gate in map)
             {
                 ushort variable = script.Variable(gate.Address, gate.Type)
                     ?? throw new InvalidDataException($"Open roads: {gate.Map} has no variable {gate.Address:X4}:{gate.Type:X4}.");
                 var sites = gate.Kind == "write"
-                    ? script.Writes(variable).Where(w => w.Value == gate.Value && (gate.Actor.Length == 0 || w.Actor == gate.Actor)).Select(w => w.At).ToList()
-                    : script.Checks(variable).Where(c => c.Value == gate.Value && c.Compare == gate.Compare && c.Actor == gate.Actor).Select(c => c.At).ToList();
+                    ? original.Writes(variable).Where(w => w.Value == gate.Value && (gate.Actor.Length == 0 || w.Actor == gate.Actor)).Select(w => w.At).ToList()
+                    : original.Checks(variable).Where(c => c.Value == gate.Value && c.Compare == gate.Compare && c.Actor == ActorName(gate.Actor)).Select(c => c.At).ToList();
+                // "Actor#n" keeps only the n-th of the actor's matching sites (1-based); Count still names how many the actor has.
+                int? only = gate.Actor.Contains('#') ? int.Parse(gate.Actor[(gate.Actor.IndexOf('#') + 1)..]) : null;
                 if (sites.Count != gate.Count)
                     throw new InvalidDataException($"Open roads: {gate.Map} {gate.Actor} \"{gate.Compare} {gate.Value}\" matched {sites.Count} places, expected {gate.Count}.");
+                if (only is int n) sites = [sites[n - 1]];
                 if (gate.Kind == "window")
                 {
                     // A story boss that appears whenever it's still alive (variable == Value) and sets the story to NewValue
@@ -123,6 +128,9 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
 
     private const byte OpEq = 0x0A, OpGte = 0x0E, OpLs = 0x0D, OpLAnd = 0x06, CaseLess = 0x53, CaseBetween = 0x57;
     private static byte[] U16(ushort value) => [(byte)value, (byte)(value >> 8)];
+
+    /// <summary>The actor name of a row, without a "#n" site index.</summary>
+    private static string ActorName(string actor) => actor.Contains('#') ? actor[..actor.IndexOf('#')] : actor;
 
     /// <summary>True when no story step lies strictly between lo and n, so the story can only be at lo in that window.</summary>
     private static bool OnlyStep(SortedSet<short> steps, short lo, short n) => steps.GetViewBetween((short)(lo + 1), (short)(n - 1)).Count == 0;

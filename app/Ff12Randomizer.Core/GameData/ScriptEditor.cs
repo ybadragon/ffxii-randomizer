@@ -72,7 +72,7 @@ public sealed class ScriptEditor
         }
         int needed = (grow + pad) / 3;
         var touched = edits.Select(e => (e.At, End: e.At + Math.Max(e.Remove, 1))).ToList();
-        var freed = NoOpJumps(actors).Where(j => !touched.Any(t => j < t.End && j + 3 > t.At)).Take(needed).ToList();
+        var freed = NoOpJumps(actors).Distinct().Where(j => !touched.Any(t => j < t.End && j + 3 > t.At)).Take(needed).ToList();
         if (freed.Count < needed)
             throw new InvalidDataException($"Script edits need {needed * 3} bytes; only {freed.Count * 3} can be freed.");
         foreach (int at in freed) edits.Add((at, 3, [], -1, false));

@@ -37,6 +37,7 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
     /// </summary>
     public const string FreeRoamId = "exp_freeroam";
     private const ushort FreeRoamStoryFlag = 0x17D4, AddPartyMemberCall = 0x0353;
+    private const ushort FreeRoamStartMap = 0x0130; // rbn_a16, entrance 0
 
     public bool IsEnabled(RandomizerSettings settings) =>
         (settings.IsOn(Id) || settings.IsOn(FreeRoamId)) && !settings.IsOn(OpenWorldFeature.Id);
@@ -51,7 +52,10 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
         code[2] = (byte)(FreeRoamStoryFlag >> 8);
         for (byte member = 1; member <= 5; member++)
             code.AddRange([PushII, member, 0, CallPopA, AddPartyMemberCall & 0xFF, AddPartyMemberCall >> 8]);
-        code.AddRange(ending[12..]);
+        // The waterway map of the prologue's ending is a story-only map and never finishes loading this late in the story,
+        // so free roam starts in Rabanastre instead: PUSHII map; PUSHII entrance; then the ending's own mode and mapjump.
+        code.AddRange([PushII, FreeRoamStartMap & 0xFF, FreeRoamStartMap >> 8, PushII, 0, 0]);
+        code.AddRange(ending[18..]);
         return code.ToArray();
     }
 
@@ -63,7 +67,7 @@ public sealed class SkipPrologueFeature : IRandomizerFeature
         branch.Replace(script, StartCode(context.Settings, ending.Code));
 
         var names = new MapNames(context.Original);
-        string? mapId = MapNames.IdOf(ending.MapNumber);
+        string? mapId = MapNames.IdOf(context.Settings.IsOn(FreeRoamId) ? FreeRoamStartMap : ending.MapNumber);
         string? place = mapId is null ? null : names.NameOf(mapId);
         string? region = mapId is null ? null : names.RegionOf(mapId);
         context.Spoil("newGame", new

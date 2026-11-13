@@ -25,3 +25,17 @@ Stage,Map,Actor,Variable,Kind,Compare,Value,NewValue,Count,Note
 2,rwg_a01,setup,0000:3000,range,<,1355,,1,Tomb of Raithwall: Garuda appears only at his point in the story
 2,rwg_a01,EventDirector,0000:3000,range,<,1345,,1,Tomb of Raithwall: the arrival scene waits for its turn in the story
 2,rwg_a01,EventDirector,0000:3000,range,<,1355,,1,Tomb of Raithwall: the arrival scene waits for its turn in the story
+3,sav_c01,MapDirector,0000:3000,check,<=,1520,0,1,Giza Plains (dry season): the path north to Ozmone Plain is walkable from the start
+3,nac_a01,setup,0000:3000,check,>=,3050,0,1,Nalbina: the soldiers who block the way to the Mosphoran Highwaste stand down from the start
+3,nac_a01,Map_Director,0000:3000,check,<,1540,0,1,Nalbina: exit to the Mosphoran Highwaste
+3,ztc_b02,Map_Director,0000:3000,check,>,1520,0,1,Zertinan Caverns: the passage to Ozmone Plain is clear from the start
+3,ztc_b02,Map_Director,0000:3000,check,<,1520,0,1,Zertinan Caverns: the passage to Ozmone Plain is clear from the start
+3,ozm_c01,Map_Director,0000:3000,check,<=,1790,0,1,Ozmone Plain: exit to the Henne Mines
+3,ozm_c01,ヘネ通行制限,0000:3000,check,<,1790,0,2,Ozmone Plain: nobody turns you back from the Henne Mines
+3,gol_a02,森人の道,0000:3000,check,>=,1700,0,2,Golmore Jungle: the hidden path to Eruyt Village can be opened from the start
+3,gol_a02,EventDirector,0000:3000,check,<,1700,0,1,Golmore Jungle: the hidden path to Eruyt Village can be opened from the start
+3,glf_a01,常駐ディレクター,0000:3000,range,<,1620,,2,Jahara: the gatekeeper lets you into the village only at his point in the story
+3,ztc_a01,Map_Director,0000:3000,check,rev <=,1520,0,1,Zertinan Caverns: passages are clear from the start
+3,ztc_c01,Map_Director,0000:3000,check,rev <=,1520,0,1,Zertinan Caverns: passages are clear from the start
+3,ztc_c03,Map_Director,0000:3000,check,rev <=,1520,0,1,Zertinan Caverns: passages are clear from the start
+3,ztc_c04,Map_Director,0000:3000,check,rev <=,1520,0,1,Zertinan Caverns: passages are clear from the start

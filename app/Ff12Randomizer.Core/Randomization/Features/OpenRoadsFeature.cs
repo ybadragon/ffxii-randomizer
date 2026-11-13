@@ -100,8 +100,10 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
                     // A scene that plays whenever the story is before N gets a lower bound: the story value when it normally
                     // plays, which is the story step just before the first one this map's scenes set. When no story step
                     // lies between that and N, "lo <= flag < N" is "flag == lo", an in-place change; otherwise code is added.
-                    short first = script.StoryWrites().Select(w => w.Value).Where(v => v > 0).Min();
-                    short lo = steps!.GetViewBetween(short.MinValue, (short)(first - 1)).Max;
+                    // NewValue, when given, is the lower bound itself (for maps with several scenes, where the step before
+                    // the map's first write would be wrong); otherwise it is the step before the smallest value this map writes.
+                    short lo = gate.NewValue != 0 ? gate.NewValue
+                        : steps!.GetViewBetween(short.MinValue, (short)(script.StoryWrites().Select(w => w.Value).Where(v => v > 0).Min() - 1)).Max;
                     foreach (int at in sites)
                     {
                         if (OnlyStep(steps, lo, gate.Value)) script.SetEquals(at, lo);

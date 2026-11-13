@@ -812,6 +812,23 @@ switch (args[0])
             break;
         }
 
+    case "storysteps":
+        {
+            // storysteps <from hex> <to hex>: every story flag assignment with a value in that range, by value, with its script and actor.
+            int lo = Convert.ToInt32(args[1], 16), hi = Convert.ToInt32(args[2], 16);
+            var found = new List<(short Value, string Where)>();
+            foreach (var e in vbf.Entries.Where(e => e.Name.StartsWith("ps2data/plan_master/us/") && e.Name.EndsWith(".ebp") && !e.Name.Contains("/event/evt_t/")))
+            {
+                var ms = new Ff12Randomizer.Core.GameData.MapScript(vbf.Extract(e));
+                if (ms.StoryFlag == 0xFFFF) continue;
+                foreach (var w in ms.StoryWrites().Where(w => w.Value >= lo && w.Value <= hi))
+                    found.Add((w.Value, $"{Path.GetFileNameWithoutExtension(e.Name)}:{w.Actor}"));
+            }
+            foreach (var g in found.GroupBy(f => f.Value).OrderBy(g => g.Key))
+                Console.WriteLine($"0x{g.Key:X4} {g.Key}: {string.Join(", ", g.Select(f => f.Where).Distinct())}");
+            break;
+        }
+
     case "storychecks":
         {
             // storychecks <map script name>: every story flag comparison and assignment in that map's script, by actor.

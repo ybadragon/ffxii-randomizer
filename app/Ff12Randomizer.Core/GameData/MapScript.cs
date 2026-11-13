@@ -46,6 +46,9 @@ public sealed class MapScript
         if (script <= 0 || script + 0x50 > ebp.Length) return;
         int table = script + (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(script + 0x18));
         int nameText = script + (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(script + 0x4C));
+        int variableStart = script + (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(script + 0x28));
+        // Not a compiled script (some .ebp hold no code); leave it empty.
+        if (table <= script || table + 4 > ebp.Length || variableStart <= script || variableStart + 4 > ebp.Length || nameText > ebp.Length) return;
         int count = (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(table));
         int variables = _variables = script + (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(script + 0x28));
         int variableCount = _variableCount = (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(variables));
@@ -137,6 +140,19 @@ public sealed class MapScript
                     yield return (actor.Name, code[i].At, (short)code[i].Operand);
             }
         }
+    }
+
+    /// <summary>
+    /// Turns the comparison found by <see cref="StoryChecks"/> at <paramref name="at"/> into "== value", in place: the
+    /// operator after the PUSHII (OPLS/OPLSE/... or a POPCMPY case jump) becomes its "equal" form and the constant changes.
+    /// </summary>
+    public void SetEquals(int at, short value)
+    {
+        SetConstant(at, value);
+        byte op = _ebp[at + 3];
+        if (IfCompares.ContainsKey(op)) _ebp[at + 3] = 0x0A;
+        else if (CaseCompares.ContainsKey(op) && op != 0x57) _ebp[at + 3] = 0x52;
+        else throw new InvalidDataException($"No comparison after the constant at {at:X}.");
     }
 
     /// <summary>Replaces the constant of a comparison found by <see cref="StoryChecks"/>.</summary>

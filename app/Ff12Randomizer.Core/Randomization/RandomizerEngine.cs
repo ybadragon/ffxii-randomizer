@@ -44,6 +44,7 @@ public static class RandomizerEngine
         new EnemyLocationsFeature(),
         new OpenGatesExperiment(),
         new OpenRoadsFeature(),
+        new OverrideFilesExperiment(),
     ];
 
     public static RunResult Run(VbfArchive original, RandomizerSettings settings, Seed seed)

@@ -101,7 +101,11 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
                 foreach (int at in sites) script.SetConstant(at, gate.NewValue);
                 context.Spoil("openRoads", new { place = gate.Note, map = gate.Map });
             }
-            if (editor.HasEdits) context.Replace(path, editor.Build());
+            if (editor.HasEdits)
+            {
+                try { context.Replace(path, editor.Build()); }
+                catch (InvalidDataException e) { throw new InvalidDataException($"Open roads: {map.Key}: {e.Message}", e); }
+            }
         }
 
         TeleportFromTheStart(context, paths["pre_z0000"]);

@@ -112,9 +112,12 @@ public sealed class ScriptEditor
         if (remaining.Count > 0) throw new InvalidDataException("A script edit is outside every actor's code.");
 
         // Grow the script by the appended code and move the sections after it.
-        int grow = (appended.Count + 15) / 16 * 16;
-        while (appended.Count < grow) appended.Add(0);
+        // The sections keep their alignment: the game crashed on a file whose 64-byte aligned sections moved by 0xAB0.
         int end = _script + scriptSize;
+        int align = 0x800;
+        while (align > 16 && end % align != 0) align /= 2;
+        int grow = (appended.Count + align - 1) / align * align;
+        while (appended.Count < grow) appended.Add(0);
         Put(_script + 0x04, (uint)(scriptSize + grow));
         for (int at = 0x04; at < _script; at += 4)
         {

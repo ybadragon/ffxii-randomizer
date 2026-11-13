@@ -75,25 +75,35 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
                 if (gate.Kind == "window")
                 {
                     // A story boss that appears whenever it's still alive (variable == Value) and sets the story to NewValue
-                    // when beaten appears only while the story is at the step before NewValue: "&& lo <= flag < NewValue".
+                    // when beaten appears only while the story is at the step before NewValue: "&& lo <= flag < NewValue",
+                    // or "&& flag == lo" when no story step lies between.
                     short lo = steps!.GetViewBetween(short.MinValue, (short)(gate.NewValue - 1)).Max;
                     byte[] flag = [MapScript.PushV, .. U16(script.StoryFlag)];
                     foreach (int at in sites)
-                        editor.Insert(at + 4, [.. flag, MapScript.PushII, .. U16((ushort)lo), OpGte, OpLAnd,
-                            .. flag, MapScript.PushII, .. U16((ushort)gate.NewValue), OpLs, OpLAnd], 8);
+                    {
+                        if (OnlyStep(steps, lo, gate.NewValue))
+                            editor.Insert(at + 4, [.. flag, MapScript.PushII, .. U16((ushort)lo), OpEq, OpLAnd], 4, true);
+                        else
+                            editor.Insert(at + 4, [.. flag, MapScript.PushII, .. U16((ushort)lo), OpGte, OpLAnd,
+                                .. flag, MapScript.PushII, .. U16((ushort)gate.NewValue), OpLs, OpLAnd], 8, true);
+                    }
                     context.Spoil("openRoads", new { place = gate.Note, map = gate.Map, waitsFor = lo });
                     continue;
                 }
                 if (gate.Kind is "range" or "caserange")
                 {
                     // A scene that plays whenever the story is before N gets a lower bound: the story value when it normally
-                    // plays, which is the story step just before the first one this map's scenes set.
+                    // plays, which is the story step just before the first one this map's scenes set. When no story step
+                    // lies between that and N, "lo <= flag < N" is "flag == lo", an in-place change; otherwise code is added.
                     short first = script.StoryWrites().Select(w => w.Value).Where(v => v > 0).Min();
                     short lo = steps!.GetViewBetween(short.MinValue, (short)(first - 1)).Max;
                     foreach (int at in sites)
                     {
-                        if (gate.Kind == "range") editor.Insert(at + 4, [MapScript.PushV, .. U16(script.StoryFlag), MapScript.PushII, .. U16((ushort)lo), OpGte, OpLAnd], 4);
-                        else editor.Replace(at, 6, [MapScript.PushII, .. U16((ushort)lo), MapScript.PushII, .. U16((ushort)(gate.Value - 1)), CaseBetween, bytes[at + 4], bytes[at + 5]], 1);
+                        if (OnlyStep(steps, lo, gate.Value)) script.SetEquals(at, lo);
+                        else if (gate.Kind == "range")
+                            editor.Insert(at + 4, [MapScript.PushV, .. U16(script.StoryFlag), MapScript.PushII, .. U16((ushort)lo), OpGte, OpLAnd], 4, true);
+                        else
+                            editor.Replace(at, 6, [MapScript.PushII, .. U16((ushort)lo), MapScript.PushII, .. U16((ushort)(gate.Value - 1)), CaseBetween, bytes[at + 4], bytes[at + 5]], 1);
                     }
                     context.Spoil("openRoads", new { place = gate.Note, map = gate.Map, waitsFor = lo });
                     continue;
@@ -111,8 +121,11 @@ public sealed class OpenRoadsFeature : IRandomizerFeature
         TeleportFromTheStart(context, paths["pre_z0000"]);
     }
 
-    private const byte OpGte = 0x0E, OpLs = 0x0D, OpLAnd = 0x06, CaseLess = 0x53, CaseBetween = 0x57;
+    private const byte OpEq = 0x0A, OpGte = 0x0E, OpLs = 0x0D, OpLAnd = 0x06, CaseLess = 0x53, CaseBetween = 0x57;
     private static byte[] U16(ushort value) => [(byte)value, (byte)(value >> 8)];
+
+    /// <summary>True when no story step lies strictly between lo and n, so the story can only be at lo in that window.</summary>
+    private static bool OnlyStep(SortedSet<short> steps, short lo, short n) => steps.GetViewBetween((short)(lo + 1), (short)(n - 1)).Count == 0;
 
     /// <summary>The first setsaveramtelepostatus(0) of the boot script (story values below 105) becomes (1).</summary>
     private static void TeleportFromTheStart(RandomizerContext context, string path)

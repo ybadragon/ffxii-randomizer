@@ -116,6 +116,12 @@ public sealed class MapScript
                 else if (op == 0x2D) flagInY = false;
                 if (op != PushII || i + 1 >= code.Count) continue;
                 byte next = code[i + 1].Op;
+                // "constant <op> flag" (the constant pushed first), named "rev <op>".
+                if (next == PushV && code[i + 1].Operand == StoryFlag && i + 2 < code.Count && IfCompares.TryGetValue(code[i + 2].Op, out string? reversed))
+                {
+                    yield return new StoryCheck(actor.Name, at, (short)operand, "rev " + reversed);
+                    continue;
+                }
                 if (i > 0 && code[i - 1].Op == PushV && code[i - 1].Operand == StoryFlag && IfCompares.TryGetValue(next, out string? compare))
                     yield return new StoryCheck(actor.Name, at, (short)operand, compare);
                 else if (flagInY && CaseCompares.TryGetValue(next, out compare))
@@ -148,11 +154,11 @@ public sealed class MapScript
     /// </summary>
     public void SetEquals(int at, short value)
     {
-        SetConstant(at, value);
         byte op = _ebp[at + 3];
         if (IfCompares.ContainsKey(op)) _ebp[at + 3] = 0x0A;
         else if (CaseCompares.ContainsKey(op) && op != 0x57) _ebp[at + 3] = 0x52;
-        else throw new InvalidDataException($"No comparison after the constant at {at:X}.");
+        else throw new InvalidDataException($"No comparison right after the constant at {at:X}.");
+        SetConstant(at, value);
     }
 
     /// <summary>Replaces the constant of a comparison found by <see cref="StoryChecks"/>.</summary>

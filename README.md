@@ -129,6 +129,7 @@ The spoiler log names places with the game's own text, not hand-written labels:
 - `loader/`: the `dinput8.dll` proxy (C++). Build with `loader\build.cmd` (MSVC Build Tools).
 - `app/Ff12Randomizer.Core`: archive reader (`VbfArchive`), patch builder (`VbfPatchBuilder`) and a
   C# mirror of the loader's read logic (`VirtualVbfStream`) for testing without the game.
+- `tools/`: developer tools (in-game test bot, map data readers); see [tools/README.md](tools/README.md) and [AGENTS.md](AGENTS.md).
 - `app/Ff12Randomizer.Cli`: developer commands: `list`, `extract`, `verify`, `testpatch`,
   `whatread` (maps a verbose `loader.log` back to file names), `treasures`, `shops`, `shopplaces`,
   `places`, `checkplaces`, `callscan <callId>...`, `dryrun <seed> <options>`, `randomize`, `restore`,

@@ -9,6 +9,8 @@ static class Paths
     public static string MapAreas => Path.Combine(Repo, "app", "Ff12Randomizer.Core", "Data", "mapAreas.csv");
     /// <summary>Every map's exits, read from the map scripts by tools/mapdata/exits.cs.</summary>
     public static string Exits => Path.Combine(Repo, "tools", "mapdata", "exits.csv");
+    /// <summary>Map id, script name and the game's place name (tools/mapdata/exits.cs names).</summary>
+    public static string MapNames => Path.Combine(Repo, "tools", "mapdata", "mapnames.csv");
     /// <summary>Extracted game files (not in git): menu map files and, in tex/, each map package's minimap picture.</summary>
     public static string MapRes => Path.Combine(Repo, "work", "mapres");
     public static string Tex => Path.Combine(MapRes, "tex");

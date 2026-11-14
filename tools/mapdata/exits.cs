@@ -7,6 +7,7 @@ using Ff12Randomizer.Core.GameData;
 // dotnet run exits.cs -- <name|hexid>...   : each map's entrances and exits (trigger lines, the map and entrance they lead to)
 // dotnet run exits.cs -- route <from> <to> : fewest-maps route over the exits, with the trigger line to walk to on each map
 // dotnet run exits.cs -- csv exits.csv     : the table the test bot's `trip` uses (every map)
+// dotnet run exits.cs -- names mapnames.csv : map id, script name and the game's place name (for the live viewer)
 // Format (found 2026-11): script base = u32 at 0x10; base+0x54 -> entrance table (u32 count, 0x20-byte entries x,y,z,facing);
 // base+0x70 -> trigger-line lists (u32 count, u32 offsets from base; each list: u32 n, then at +0x10 n segments of 0x20
 // bytes (ax,ay,az,1)(bx,by,bz,flags), trigger id = (flags >> 8) & 0xFF). The actor whose code starts "PUSHII id;
@@ -21,6 +22,18 @@ string Name(string a) => names.Values.Contains(a) ? a : names[Convert.ToInt32(a,
 string ebpDir = Path.Combine(repo, "work", "ebp");
 Directory.CreateDirectory(ebpDir);
 
+if (args[0] == "names")
+{
+    // names <out> : every map id with its script name and the game's own place name (planmapname.bin), for display
+    var vbf = new Ff12Randomizer.Core.Vbf.VbfArchive(Ff12Randomizer.Core.Game.GameInstall.FindSteamInstall()!.DataArchivePath);
+    var places = new PlaceNames(vbf);
+    var rows = new List<string> { "map,name,place" };
+    foreach (var (id, nm) in names.OrderBy(k => k.Key))
+        rows.Add($"{id:X},{nm},{(places.Sub(id) ?? "").Replace(",", " ")}");
+    File.WriteAllLines(args[1], rows);
+    Console.WriteLine($"{rows.Count - 1} maps");
+    return;
+}
 if (args[0] == "csv")
 {
     // csv <out> : every map: mapId,mapName,exitId,midX,midZ,inX,inZ,destId,destName,destEntrance (inX/inZ = this map's entrance nearest the line: inside)

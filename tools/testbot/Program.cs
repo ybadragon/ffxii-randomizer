@@ -430,6 +430,13 @@ switch (args[0])
             }
             break;
         }
+    case "viz":
+        {
+            // viz: live window with the current map, the party, the pathfinder's route and the trip (see Viz.cs).
+            // Runs until closed; start it before or during a trip.
+            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)));
+            break;
+        }
     case "trip":
         {
             // trip <goalMapHex> [x z] [maxMaps=12]: walks across maps along the fewest-maps route over the game's own exits
@@ -451,16 +458,26 @@ switch (args[0])
                 return last;
             }
             ushort MapNow() => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
+            // for the live viewer (memtool viz): maps walked so far, then the planned rest of the chain
+            var mapNames = exitRows.GroupBy(r => r.map).ToDictionary(g => g.Key, g => g.First().name);
+            foreach (var r in exitRows) mapNames.TryAdd(r.dest, r.dname);
+            string NameOf(int id) => mapNames.TryGetValue(id, out var n) ? n : $"0x{id:X}";
+            string goalLabel = NameOf(goalMap) + (gx is double glx && gz is double glz ? $" ({glx:F0}, {glz:F0})" : "");
+            var visited = new List<(int id, string name)>();
             for (int hop = 0; hop <= maxMaps; hop++)
             {
                 int mapId = MapNow();
                 var (px, _, pz) = Pos();
-                string name = exitRows.FirstOrDefault(r => r.map == mapId).name ?? "?";
+                string name = NameOf(mapId);
+                visited.Add((mapId, name));
                 Console.WriteLine($"[{hop}] map 0x{mapId:X} ({name}) at ({px:F1}, {pz:F1})");
                 if (mapId == goalMap)
                 {
-                    if (gx is not double tx || gz is not double tz) { Console.WriteLine("TRIP DONE"); return 0; }
-                    var r = Walk(tx, tz); Console.WriteLine(r.StartsWith("arrived") ? "TRIP DONE" : "trip ended: " + r); return r.StartsWith("arrived") ? 0 : 1;
+                    if (gx is not double tx || gz is not double tz) { Console.WriteLine("TRIP DONE"); LiveState.Trip(visited, visited.Count - 1, -1, null, goalLabel, "arrived"); return 0; }
+                    LiveState.Trip(visited, visited.Count - 1, -1, (tx, tz), goalLabel, "walking to the goal");
+                    var r = Walk(tx, tz); Console.WriteLine(r.StartsWith("arrived") ? "TRIP DONE" : "trip ended: " + r);
+                    LiveState.Trip(visited, visited.Count - 1, -1, (tx, tz), goalLabel, r.StartsWith("arrived") ? "arrived" : "stopped: " + r);
+                    return r.StartsWith("arrived") ? 0 : 1;
                 }
                 // fewest-maps route from here
                 var prev = new Dictionary<int, int> { [mapId] = -1 }; var q = new Queue<int>(); q.Enqueue(mapId);
@@ -471,13 +488,16 @@ switch (args[0])
                 var ex = exitRows.First(r => r.map == mapId && r.dest == nextMap);
                 double dx = ex.mx - ex.ix, dz = ex.mz - ex.iz, len = Math.Max(0.01, Math.Sqrt(dx * dx + dz * dz)); dx /= len; dz /= len;
                 Console.WriteLine($"    heading for the exit to 0x{nextMap:X} ({ex.dname}) at ({ex.mx:F1}, {ex.mz:F1})");
+                var rest = new List<(int id, string name)>();
+                for (int m = goalMap; m != mapId; m = prev[m]) rest.Insert(0, (m, NameOf(m)));
+                LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, (ex.mx, ex.mz), goalLabel, $"heading for the exit to {ex.dname}");
                 var res = Walk(ex.mx - dx * 2.5, ex.mz - dz * 2.5);
                 // cross the line: keep walking outwards (from the map's entrance by the line through the line's middle)
                 var push = System.Diagnostics.Stopwatch.StartNew();
                 while (MapNow() == mapId && push.Elapsed.TotalSeconds < 8) { var (qx, _, qz) = Pos(); Steer(qx + dx * 6, qz + dz * 6, 300); Thread.Sleep(50); }
                 var waitSw = System.Diagnostics.Stopwatch.StartNew();
                 while (waitSw.Elapsed.TotalSeconds < 30 && MapNow() == mapId) Thread.Sleep(500);
-                if (MapNow() == mapId) { Console.WriteLine($"trip ended: the exit at ({ex.mx:F1}, {ex.mz:F1}) did not lead out ({res})"); return 1; }
+                if (MapNow() == mapId) { Console.WriteLine($"trip ended: the exit at ({ex.mx:F1}, {ex.mz:F1}) did not lead out ({res})"); LiveState.Trip(visited, visited.Count - 1, nextMap, (ex.mx, ex.mz), goalLabel, "stopped: the exit did not lead out"); return 1; }
                 Console.WriteLine($"    map changed to 0x{MapNow():X}");
                 // wait for the next map to finish loading: the party position settles near the entrance
                 var settle = System.Diagnostics.Stopwatch.StartNew(); var lastP = Pos(); int still = 0;
@@ -514,13 +534,16 @@ switch (args[0])
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var gpx = tm.ToPx(tx, tz);
             List<(int x, int y)> route = new(); int idx = 0, steps = 0;
+            // for the live viewer (memtool viz): the route in world units, the goal and the walls found on this walk
+            var blockedAt = new List<(double x, double z)>();
+            void Live(string status) => LiveState.Route(mapId, route.Select(r => tm.ToWorld(r.x, r.y)), (tx, tz), blockedAt, status);
             var lastCheck = Pos(); var checkTimer = System.Diagnostics.Stopwatch.StartNew(); int stuckTries = 0; double bestGoal = double.MaxValue;
             while (sw.Elapsed.TotalSeconds < secs)
             {
                 var c = Pos();
-                if (BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)) != mapId) { Console.WriteLine($"map changed at {c.x:F2} {c.z:F2}"); return 0; }
+                if (BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)) != mapId) { Console.WriteLine($"map changed at {c.x:F2} {c.z:F2}"); Live("map changed"); return 0; }
                 double toGoal = Math.Sqrt((tx - c.x) * (tx - c.x) + (tz - c.z) * (tz - c.z));
-                if (toGoal < 1.5) { Console.WriteLine($"arrived {c.x:F2} {c.z:F2}"); return 0; }
+                if (toGoal < 1.5) { Console.WriteLine($"arrived {c.x:F2} {c.z:F2}"); Live("arrived"); return 0; }
                 var at = tm.ToPx(c.x, c.z);
                 // nearest route point; re-plan if none is within 6 px (off the route) or there is no route yet
                 int near = -1; double nd = double.MaxValue;
@@ -536,6 +559,7 @@ switch (args[0])
                     idx = 0; near = 0;
                     Console.WriteLine($"planned {route.Count} px from ({c.x:F1}, {c.z:F1})");
                     tm.SaveDebug(Path.Combine(navDir, "tnav.png"), route, at, route[Math.Min(route.Count - 1, 9)]);
+                    Live(blockedAt.Count > 0 ? "walking around a wall" : "walking");
                 }
                 idx = near;
                 bool last = idx + 9 >= route.Count - 1;
@@ -550,12 +574,13 @@ switch (args[0])
                     double tg = Math.Sqrt((tx - now.x) * (tx - now.x) + (tz - now.z) * (tz - now.z));
                     if (moved < 1)
                     {
-                        if (++stuckTries > 4) { Console.WriteLine($"stuck at {now.x:F2} {now.z:F2}: moved {moved:F2} units in 5 s, {stuckTries - 1} blocks added did not help"); return 1; }
+                        if (++stuckTries > 4) { Console.WriteLine($"stuck at {now.x:F2} {now.z:F2}: moved {moved:F2} units in 5 s, {stuckTries - 1} blocks added did not help"); Live("stuck"); return 1; }
                         // a wall the texture doesn't show: block the corridor just ahead, plan around it (this walk only: barriers change with the story)
                         var atp = tm.ToPx(now.x, now.z); var np = tm.ToPx(nx, nz);
                         double ax = np.u - atp.u, az = np.v - atp.v, len = Math.Max(0.01, Math.Sqrt(ax * ax + az * az));
                         double bu = atp.u + ax / len * 9, bv = atp.v + az / len * 9;
                         tm.AddBlock(bu, bv, 8);
+                        blockedAt.Add(tm.ToWorld(bu, bv));
                         Console.WriteLine($"blocked at {now.x:F2} {now.z:F2}: wall ahead at world ({(bu - tm.Ox) / 4:F1}, {(bv - tm.Oy) / 4:F1}) added, re-planning");
                         Steer(now.x - ax / len * 2, now.z - az / len * 2, 500); // back off from the wall
                         route.Clear();

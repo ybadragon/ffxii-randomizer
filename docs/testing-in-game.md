@@ -68,8 +68,12 @@ Build it with `dotnet build -c Release` in `tools/testbot`. Full command list: [
   goes to South Bank Village's crystal, and `trip 131 238 72` goes back to the Eastgate. Verified in game both ways
   (2026-11-14).
 
+To watch a trip, or record it next to the game, run `memtool viz`: a live window with the map, the party, the
+route being followed and the chain of maps.
+
 **Run walks in the background and watch them.** Start `trip` / `tnav` as a background command, and put a monitor on
-its output that matches every line you'd act on: `^\[` (each map), `heading`, `best:`, `blocked`, `stuck`, `no route`,
+its output (that command's own output file, not "the newest file": a viewer started alongside it
+writes one too) that matches every line you'd act on: `^\[` (each map), `heading`, `best:`, `blocked`, `stuck`, `no route`,
 `did not lead`, `map changed`, `arrived`, `TRIP`, `trip ended`, `timeout`, `Exception`. Never block in the foreground
 waiting for it. When it reports `blocked` or `stuck`, take a screenshot before deciding anything.
 

@@ -16,7 +16,7 @@ public sealed record SaveImpactInfo(SaveImpact Impact, string Note)
     public string Label => Impact switch
     {
         SaveImpact.ExistingSaves => "Works on existing saves",
-        SaveImpact.Partly => "Partly needs a new game",
+        SaveImpact.Partly => "Works on saves",
         _ => "New game only",
     };
 }
@@ -26,7 +26,7 @@ public static class SaveImpacts
 {
     private static readonly Dictionary<string, SaveImpactInfo> ByGroup = new()
     {
-        ["openworld"] = new(SaveImpact.Partly, "Roads open as soon as you load a save; starting in the Garamsythe Waterway needs a new game."),
+        ["openworld"] = new(SaveImpact.Partly, "Roads open as soon as you load a save. Only the prologue skip needs a new game."),
         ["skipprologue"] = new(SaveImpact.NewGameOnly, "The prologue only plays at the start of a new game. Saves aren't affected."),
         ["potions"] = new(SaveImpact.NewGameOnly, "Starting items are given when you start a new game."),
         ["pstats"] = new(SaveImpact.NewGameOnly, "Party stats are copied into your save when a character joins."),

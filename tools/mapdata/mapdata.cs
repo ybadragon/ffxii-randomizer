@@ -10,6 +10,7 @@ using Ff12MapData;
 //   dotnet run mapdata.cs -- scan                         every map: barriers and variant changes (slow the first time)
 //   dotnet run mapdata.cs -- draw <map> <out.png> [variant]   picture: minimap, walk mesh, exits, barriers, variant changes
 //   dotnet run mapdata.cs -- actor <map> <actor>         one actor's script code (call names from work/ff12-script)
+//   dotnet run mapdata.cs -- crystals                     every teleport destination (number, map, landing spot)
 if (args.Length == 0) { Console.WriteLine("map <map> | route <from> <to> | explain <map> <x> <z> | scan | draw <map> <png> [variant] | actor <map> <actor>"); return 1; }
 int Id(string s) => GameFiles.MapId(s) ?? Convert.ToInt32(s, 16);
 string Label(int id) => $"{GameFiles.PlaceName(id)} ({GameFiles.ScriptName(id)}, 0x{id:X})";
@@ -104,6 +105,13 @@ switch (args[0])
                     : x.Op is 0x48 or 0x49 && x.Operand == s.StoryFlag ? "STORYFLAG" : $"{(short)x.Operand}";
                 Console.WriteLine($"  {x.At:X5} {op} {arg}");
             }
+            return 0;
+        }
+    case "crystals":
+        {
+            // crystals: every teleport destination: its number in the teleport list, map, and where you land (by the crystal)
+            foreach (var c in Crystals.List) Console.WriteLine($"  {c.Number,2}: {Label(c.Map)} entrance {c.Entrance} at ({c.X:F1}, {c.Z:F1})");
+            Console.WriteLine($"{Crystals.List.Count} teleport destinations");
             return 0;
         }
     case "scan":

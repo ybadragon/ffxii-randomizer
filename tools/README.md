@@ -42,7 +42,9 @@ presses keys. Main commands:
 
 - `memtool where`: map id, story flag, party position and camera direction.
 - `memtool tnav <x> <z>`: walks to a point on the current map. It plans the route on the map package's minimap
-  picture, keeps away from walls, and steers along the route. On a map with several minimap variants it uses the one
+  picture, smooths it into curves (straight where there is clear line of sight, rounded corners), and steers along it
+  by holding forward and turning the camera (`Helm.cs`: turns only when more than 10 degrees off, learns the camera's
+  turn rate as it goes; `FF12_BOT_STEER=keys` for the older eight-direction key taps). On a map with several minimap variants it uses the one
   that best matches the live minimap. If the party stops moving for 5 seconds, it marks the spot ahead as a wall for
   this walk only and plans around it, and prints the map data's explanation for that spot (`why:` lines). It never
   saves these walls, because story barriers come and go.

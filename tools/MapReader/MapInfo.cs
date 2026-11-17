@@ -52,6 +52,18 @@ public sealed class MapInfo
     /// </summary>
     MapPackage? FindPackage()
     {
+        // the answer is remembered in work/cache (derived from the game files, never committed): finding it means reading
+        // every package in the area, which is what made each map change take seconds
+        var memo = Path.Combine(GameFiles.CacheDir, "derived", "package", Script + ".txt");
+        if (File.Exists(memo)) return File.ReadAllText(memo).Trim() is { Length: > 0 } known ? MapPackage.Get(known) : null;
+        var found = SearchPackage();
+        Directory.CreateDirectory(Path.GetDirectoryName(memo)!);
+        File.WriteAllText(memo, found?.Name ?? "");
+        return found;
+    }
+
+    MapPackage? SearchPackage()
+    {
         var points = Info.Entrances.Where(e => e.X != 0 || e.Z != 0).Select(e => new Point2(e.X, e.Z)).ToList();
         if (points.Count == 0) points = Info.Exits.Select(x => x.Mid).ToList();
         MapPackage? best = null; int bestHits = 0;

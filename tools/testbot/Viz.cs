@@ -43,6 +43,8 @@ sealed class VizForm : Form
         int side = Math.Min(900, work.Height - 60);
         ClientSize = new Size(side - 20, side);
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        // stays above the game without taking focus: the bot's key presses must keep going to the game. T toggles it.
+        TopMost = true;
         KeyPreview = true;
         KeyDown += (_, e) => { if (e.KeyCode == Keys.T) TopMost = !TopMost; };
         _timer.Tick += (_, _) => Tick();
@@ -299,9 +301,21 @@ sealed class VizForm : Form
         TextRenderer.DrawText(g, text, _label, box, color, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
     }
 
-    public static void Run(Func<(float x, float y, float z)> pos, Func<int> map)
+    protected override bool ShowWithoutActivation => true;
+
+    /// <summary>Opens the viewer on a monitor the game isn't on (the game's borderless window covers its own monitor), or
+    /// beside the game when there is only one.</summary>
+    public static void Run(Func<(float x, float y, float z)> pos, Func<int> map, IntPtr gameWindow)
     {
-        var t = new Thread(() => { Application.EnableVisualStyles(); Application.SetHighDpiMode(HighDpiMode.SystemAware); Application.Run(new VizForm(pos, map)); });
+        var t = new Thread(() =>
+        {
+            Application.EnableVisualStyles(); Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            var form = new VizForm(pos, map) { StartPosition = FormStartPosition.Manual };
+            var game = Screen.FromHandle(gameWindow);
+            var screen = Screen.AllScreens.FirstOrDefault(s => !s.Equals(game)) ?? game;
+            form.Location = new Point(screen.WorkingArea.X + 40, screen.WorkingArea.Y + 20);
+            Application.Run(form);
+        });
         t.SetApartmentState(ApartmentState.STA);
         t.Start();
         t.Join();

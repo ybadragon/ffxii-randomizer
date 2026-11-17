@@ -105,6 +105,73 @@ sealed class TexMap
         return path;
     }
 
+    /// <summary>
+    /// Turns a grid route into a smooth one: straight runs where the line of sight keeps at least the clearance the grid
+    /// route had there (capped at 6 px), corners rounded with three passes of Chaikin's corner cutting, then points every
+    /// pixel again so callers can treat it like the grid route.
+    /// </summary>
+    public List<(int x, int y)> Smooth(List<(int x, int y)> path)
+    {
+        if (path.Count < 3) return path;
+        // 1. string pulling: from each kept point, jump to the farthest point it can see without losing clearance
+        var keep = new List<(double x, double y)> { path[0] };
+        int i = 0;
+        while (i < path.Count - 1)
+        {
+            int best = i + 1, minClear = Clear[path[i].x, path[i].y];
+            for (int j = i + 1; j < path.Count; j++)
+            {
+                minClear = Math.Min(minClear, Clear[path[j].x, path[j].y]);
+                if (Sees(path[i], path[j], Math.Min(6, minClear))) best = j;
+                else if (j - best > 40) break; // well past the last visible point: stop looking
+            }
+            keep.Add(path[best]);
+            i = best;
+        }
+        // 2. round the corners; the ends stay put
+        var pts = keep;
+        for (int pass = 0; pass < 3; pass++)
+        {
+            var next = new List<(double x, double y)> { pts[0] };
+            for (int k = 0; k + 1 < pts.Count; k++)
+            {
+                var (ax, ay) = pts[k]; var (bx, by) = pts[k + 1];
+                if (k > 0) next.Add((ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25));
+                if (k + 2 < pts.Count) next.Add((ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75));
+            }
+            next.Add(pts[^1]);
+            pts = next;
+        }
+        // 3. a point every pixel, staying on floor (a cut corner that clipped a wall keeps the grid point instead)
+        var outp = new List<(int x, int y)>();
+        for (int k = 0; k + 1 < pts.Count; k++)
+        {
+            var (ax, ay) = pts[k]; var (bx, by) = pts[k + 1];
+            int n = Math.Max(1, (int)Math.Ceiling(Math.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay))));
+            for (int s = 0; s < n; s++)
+            {
+                int x = (int)Math.Round(ax + (bx - ax) * s / n), y = (int)Math.Round(ay + (by - ay) * s / n);
+                if (x < 0 || y < 0 || x >= W || y >= H || !Floor[x, y]) return path;
+                if (outp.Count == 0 || outp[^1] != (x, y)) outp.Add((x, y));
+            }
+        }
+        outp.Add(path[^1]);
+        return outp;
+    }
+
+    // Every half pixel along a to b is floor with at least `need` px to the nearest wall.
+    bool Sees((int x, int y) a, (int x, int y) b, int need)
+    {
+        double len = Math.Sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
+        int n = Math.Max(1, (int)(len * 2));
+        for (int s = 0; s <= n; s++)
+        {
+            int x = (int)Math.Round(a.x + (b.x - a.x) * (double)s / n), y = (int)Math.Round(a.y + (b.y - a.y) * (double)s / n);
+            if (x < 0 || y < 0 || x >= W || y >= H || !Floor[x, y] || Clear[x, y] < need) return false;
+        }
+        return true;
+    }
+
     public void SaveDebug(string file, List<(int x, int y)> path, (double u, double v) at, (int x, int y) next)
     {
         int x0 = W, y0 = H, x1 = 0, y1 = 0;

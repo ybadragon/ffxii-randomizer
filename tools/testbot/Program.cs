@@ -8,6 +8,9 @@ using System.Runtime.InteropServices;
 //  get <type> <addr> [n]           type u8/u16/u32/f32; addr hex or exe+hex
 //  put <type> <addr> <value>
 //  find <type> <value>             addresses holding value (writable memory)
+// never leave a movement key held down: release them on any exit, crashes included
+AppDomain.CurrentDomain.UnhandledException += (_, _) => Input.ReleaseAll();
+AppDomain.CurrentDomain.ProcessExit += (_, _) => Input.ReleaseAll();
 var p = Process.GetProcessesByName("FFXII_TZA").FirstOrDefault() ?? throw new Exception("game not running");
 IntPtr h = Native.OpenProcess(0x1F0FFF, false, p.Id);
 long exe = (long)p.MainModule!.BaseAddress;
@@ -81,6 +84,18 @@ void Steer(double tx, double tz, int ms)
     var dirs = new (char[] k, double ang)[] { (['W'], 0), (['W', 'D'], 45), (['D'], 90), (['S', 'D'], 135), (['S'], 180), (['S', 'A'], -135), (['A'], -90), (['W', 'A'], -45) };
     var pick = dirs.OrderBy(o => Math.Abs(Norm((rel - o.ang) * Math.PI / 180))).First();
     Input.Hold(pick.k, ms);
+}
+
+// Measures how the camera turns: a short tap of the Right arrow, standing still. Returns radians per ms (signed).
+double CalibrateCamera()
+{
+    double a0 = ConeAngle();
+    Input.HoldArrow(Input.Right, 250);
+    Thread.Sleep(150);
+    double turned = Norm(ConeAngle() - a0);
+    Input.HoldArrow(Input.Left, 250); // turn back
+    Thread.Sleep(150);
+    return Math.Abs(turned) < 0.01 ? 0 : turned / 250;
 }
 
 // Walks straight toward (tx, tz). Movement is camera-relative; the camera matrix at exe+1E5E528 gives c, s with
@@ -289,7 +304,7 @@ switch (args[0])
         {
             // viz: live window with the current map, the party, the pathfinder's route and the trip (see Viz.cs).
             // Runs until closed; start it before or during a trip.
-            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)));
+            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)), p.MainWindowHandle);
             break;
         }
     case "trip":
@@ -348,6 +363,8 @@ switch (args[0])
                 var rest = new List<(int id, string name)>();
                 for (int m = goalMap; m != mapId; m = prev[m].map) rest.Insert(0, (m, NameOf(m)));
                 LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, $"heading for the exit to {NameOf(nextMap)}");
+                // read the next map (package match, minimap pictures) while walking this one, so the change doesn't wait on it
+                var prefetch = Task.Run(() => { if (Ff12MapData.MapInfo.For(nextMap)?.Package is { } np) for (int v = 0; v < np.VariantCount; v++) np.Minimap(v); });
                 var res = Walk(ex.Mid.X - dx * 2.5, ex.Mid.Z - dz * 2.5);
                 // cross the line: keep walking outwards (from the map's entrance by the line through the line's middle)
                 var push = System.Diagnostics.Stopwatch.StartNew();
@@ -356,10 +373,15 @@ switch (args[0])
                 while (waitSw.Elapsed.TotalSeconds < 30 && MapNow() == mapId) Thread.Sleep(500);
                 if (MapNow() == mapId) { Console.WriteLine($"trip ended: the exit at ({ex.Mid.X:F1}, {ex.Mid.Z:F1}) did not lead out ({res})"); LiveState.Trip(visited, visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, "stopped: the exit did not lead out"); return 1; }
                 Console.WriteLine($"    map changed to 0x{MapNow():X}");
-                // wait for the next map to finish loading: the party position settles near the entrance
+                // wait for the next map to be playable: the position must first land near one of the new map's entrances
+                // (right after the jump it still reads the old map's spot), then stay put for half a second. Arrival scenes (a region's
+                // name banner) also hold the party still; telling them apart needs a "has control" value from memory.
+                int newMap = MapNow();
+                var ents = Ff12MapData.MapInfo.For(newMap)?.Info.Entrances.Where(e => e.X != 0 || e.Z != 0).ToList() ?? [];
+                bool AtEntrance((float x, float y, float z) q) => ents.Count == 0 || ents.Any(e => Math.Abs(e.X - q.x) + Math.Abs(e.Z - q.z) < 12);
                 var settle = System.Diagnostics.Stopwatch.StartNew(); var lastP = Pos(); int still = 0;
-                while (settle.Elapsed.TotalSeconds < 20 && still < 4) { Thread.Sleep(500); var np = Pos(); still = Math.Abs(np.x - lastP.x) + Math.Abs(np.z - lastP.z) < 0.01 ? still + 1 : 0; lastP = np; }
-                Thread.Sleep(1500);
+                while (settle.Elapsed.TotalSeconds < 30 && (still < 2 || !AtEntrance(lastP)))
+                { Thread.Sleep(250); var np = Pos(); still = Math.Abs(np.x - lastP.x) + Math.Abs(np.z - lastP.z) < 0.01 ? still + 1 : 0; lastP = np; }
             }
             Console.WriteLine("trip ended: too many maps");
             return 1;
@@ -373,23 +395,46 @@ switch (args[0])
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             double tx = double.Parse(args[1], ci), tz = double.Parse(args[2], ci), secs = args.Length > 3 ? double.Parse(args[3], ci) : 120;
             int mapId = BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
+            var startup = System.Diagnostics.Stopwatch.StartNew();
             var info = Ff12MapData.MapInfo.For(mapId);
             if (info?.Package is not { VariantCount: > 0 } pkg) { Console.WriteLine($"no map package with a minimap picture for map 0x{mapId:X}"); return 1; }
             int ox = (int)Math.Round(-pkg.Origin.X * 4), oy = (int)Math.Round(-pkg.Origin.Z * 4);
             Input.Focus(p.MainWindowHandle);
-            TexMap tm = null!; int variant = 0; double bestScore = -1;
-            for (int v = 0; v < pkg.VariantCount; v++)
+            // one route-planning picture per minimap variant (variants differ exactly where the game opens or closes a way)
+            var cands = Enumerable.Range(0, pkg.VariantCount).Select(v => new TexMap(pkg.Minimap(v), ox, oy)).ToList();
+            // arrival scenes (a region's name banner) hide the minimap and hold the party still: wait until the live minimap
+            // matches one of the variants before walking (up to 20 s, then go anyway)
+            var scores = cands.Select(cm => Align(cm, 12).score).ToList();
+            var arrival = System.Diagnostics.Stopwatch.StartNew();
+            if (scores.Max() < 0.25) Console.WriteLine("waiting for the minimap (an arrival scene?)");
+            while (scores.Max() < 0.25 && arrival.Elapsed.TotalSeconds < 20) { Thread.Sleep(500); scores = cands.Select(cm => Align(cm, 12).score).ToList(); }
+            // the variant must have a route from the party to the target; among those, the best match to the live minimap
+            TexMap tm = cands[0]; int variant = 0; double bestScore = -1; bool bestRoutes = false;
+            var here = Pos();
+            for (int v = 0; v < cands.Count; v++)
             {
-                var cand = new TexMap(pkg.Minimap(v), ox, oy);
-                var a = Align(cand, 12);
-                if (a.score > bestScore) { bestScore = a.score; tm = cand; variant = v; }
+                var from = cands[v].ToPx(here.x, here.z); var to = cands[v].ToPx(tx, tz);
+                bool routes = cands[v].Path(((int)from.u, (int)from.v), ((int)to.u, (int)to.v)).Count > 0;
+                if (routes && !bestRoutes || routes == bestRoutes && scores[v] > bestScore) { bestScore = scores[v]; tm = cands[v]; variant = v; bestRoutes = routes; }
             }
-            Console.WriteLine($"map 0x{mapId:X} ({info.Place}) = {pkg.Name} variant {variant} of {pkg.VariantCount}, offset ({ox}, {oy}), aligned score {bestScore:F2}");
+            if (!bestRoutes) Console.WriteLine($"no minimap variant of {pkg.Name} has a route from here to ({tx:F1}, {tz:F1})");
+            Console.WriteLine($"map 0x{mapId:X} ({info.Place}) = {pkg.Name} variant {variant} of {pkg.VariantCount}, offset ({ox}, {oy}), aligned score {bestScore:F2}, ready in {startup.ElapsedMilliseconds} ms");
             // why the party is stuck at a spot, from the map's own data (barriers, floor that needs another variant, triggers)
             void Explain(double x, double z) { foreach (var line in info.Explain(new(x, z))) Console.WriteLine("  why: " + line); }
             var alignTimer = System.Diagnostics.Stopwatch.StartNew();
             Input.Focus(p.MainWindowHandle);
             var navDir = Paths.Out("game");
+            // smooth steering (hold the movement keys, turn the camera); FF12_BOT_STEER=keys uses the older key taps
+            bool smooth = Environment.GetEnvironmentVariable("FF12_BOT_STEER") != "keys";
+            // the camera's turn rate: from the previous walk (the Helm keeps refining it) when that was recent, else measured once
+            var rateFile = Path.Combine(Paths.Out("live"), "camera.txt");
+            double camRate = !smooth ? 0 : File.Exists(rateFile) && DateTime.UtcNow - File.GetLastWriteTimeUtc(rateFile) < TimeSpan.FromMinutes(10)
+                && double.TryParse(File.ReadAllText(rateFile), System.Globalization.NumberStyles.Float, ci, out double saved) && saved != 0 ? saved : CalibrateCamera();
+            if (smooth) Console.WriteLine($"camera turns {camRate * 1000 * 180 / Math.PI:F0} degrees per second of Right arrow");
+            var helm = new Helm(ConeAngle, camRate);
+            // hand the learned rate on to the next walk (the next map of a trip)
+            using var saveRate = new OnExit(() => { if (smooth && helm.Rate != 0) File.WriteAllText(rateFile, helm.Rate.ToString("R", ci)); });
+            using var keys = Input.Session();
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var gpx = tm.ToPx(tx, tz);
             List<(int x, int y)> route = new(); int idx = 0, steps = 0;
@@ -400,6 +445,13 @@ switch (args[0])
             while (sw.Elapsed.TotalSeconds < secs)
             {
                 var c = Pos();
+                // the game lost focus (someone alt-tabbed): keys would go to the other window, so let go and wait for it
+                if (!Input.IsFocused(p.MainWindowHandle))
+                {
+                    Input.ReleaseAll(); Console.WriteLine("paused: the game isn't the focused window");
+                    while (!Input.IsFocused(p.MainWindowHandle) && !p.HasExited) Thread.Sleep(250);
+                    Console.WriteLine("resumed"); checkTimer.Restart(); lastCheck = Pos(); continue;
+                }
                 if (BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)) != mapId) { Console.WriteLine($"map changed at {c.x:F2} {c.z:F2}"); Live("map changed"); return 0; }
                 double toGoal = Math.Sqrt((tx - c.x) * (tx - c.x) + (tz - c.z) * (tz - c.z));
                 if (toGoal < 1.5) { Console.WriteLine($"arrived {c.x:F2} {c.z:F2}"); Live("arrived"); return 0; }
@@ -413,7 +465,7 @@ switch (args[0])
                 }
                 if (route.Count == 0 || nd > 6)
                 {
-                    route = tm.Path(((int)at.u, (int)at.v), ((int)gpx.u, (int)gpx.v));
+                    route = tm.Smooth(tm.Path(((int)at.u, (int)at.v), ((int)gpx.u, (int)gpx.v)));
                     if (route.Count == 0) { Console.WriteLine($"no route on the map texture from {c.x:F2} {c.z:F2}"); return 1; }
                     idx = 0; near = 0;
                     Console.WriteLine($"planned {route.Count} px from ({c.x:F1}, {c.z:F1})");
@@ -421,10 +473,12 @@ switch (args[0])
                     Live(blockedAt.Count > 0 ? "walking around a wall" : "walking");
                 }
                 idx = near;
-                bool last = idx + 9 >= route.Count - 1;
-                var next = route[Math.Min(route.Count - 1, idx + 9)];
+                // aim farther ahead when steering smoothly (24 px = 6 units): a near target swings around as the party moves
+                int ahead = smooth && camRate != 0 ? 24 : 9;
+                bool last = idx + ahead >= route.Count - 1;
+                var next = route[Math.Min(route.Count - 1, idx + ahead)];
                 var (nx, nz) = last ? (tx, tz) : tm.ToWorld(next.x, next.y);
-                Steer(nx, nz, toGoal < 4 ? 120 : 250);
+                if (smooth && camRate != 0) { helm.Update(Math.Atan2(nz - c.z, nx - c.x)); Thread.Sleep(30); } else Steer(nx, nz, toGoal < 4 ? 120 : 250);
                 if (alignTimer.Elapsed.TotalSeconds >= 3) { var a = Align(tm, 6); if (a.dx != 0 || a.dy != 0) { Console.WriteLine($"drift corrected by ({a.dx}, {a.dy}), score {a.score:F2}"); route.Clear(); } alignTimer.Restart(); }
                 steps++;
                 if (checkTimer.Elapsed.TotalSeconds >= 5)
@@ -442,7 +496,7 @@ switch (args[0])
                         blockedAt.Add(tm.ToWorld(bu, bv));
                         Console.WriteLine($"blocked at {now.x:F2} {now.z:F2}: wall ahead at world ({(bu - tm.Ox) / 4:F1}, {(bv - tm.Oy) / 4:F1}) added, re-planning");
                         Explain(now.x, now.z);
-                        Steer(now.x - ax / len * 2, now.z - az / len * 2, 500); // back off from the wall
+                        Input.ReleaseAll(); Steer(now.x - ax / len * 2, now.z - az / len * 2, 500); // back off from the wall
                         route.Clear();
                     }
                     if (moved >= 1 && tg < bestGoal - 2) { stuckTries = 0; bestGoal = tg; }
@@ -682,6 +736,37 @@ static class Input
         Thread.Sleep(ms);
         foreach (var k in keys) Send(k, true);
     }
+
+    public static bool IsFocused(IntPtr h) => GetForegroundWindow() == h;
+
+    public const ushort Left = 0x25, Right = 0x27;
+
+    // an arrow key (an extended key: it needs the extended flag to reach the game as an arrow)
+    public static void HoldArrow(ushort vk, int ms)
+    {
+        void SendArrow(bool up)
+        {
+            var i = new INPUT[1]; i[0].type = 1; i[0].ki.scan = (ushort)MapVirtualKey(vk, 0); i[0].ki.flags = 8u | 1u | (up ? 2u : 0u);
+            SendInput(1, i, Marshal.SizeOf<INPUT>());
+        }
+        SendArrow(false); Thread.Sleep(ms); SendArrow(true);
+    }
+
+    static readonly HashSet<char> held = new();
+
+    /// <summary>Keeps exactly these movement keys down: presses the new ones, releases the rest, so running never pauses
+    /// between steering updates.</summary>
+    public static void Keep(char[] keys)
+    {
+        foreach (var k in held.Except(keys).ToList()) { Send(k, true); held.Remove(k); }
+        foreach (var k in keys.Except(held).ToList()) { Send(k, false); held.Add(k); }
+    }
+
+    public static void ReleaseAll() => Keep([]);
+
+    /// <summary>Releases every held movement key when the scope ends (including early returns).</summary>
+    public static IDisposable Session() => new Releaser();
+    sealed class Releaser : IDisposable { public void Dispose() => ReleaseAll(); }
 }
 
 static class Native
@@ -693,3 +778,6 @@ static class Native
     [DllImport("kernel32.dll")] public static extern IntPtr VirtualQueryEx(IntPtr h, IntPtr a, out MBI m, IntPtr l);
     [StructLayout(LayoutKind.Sequential)] public struct MBI { public IntPtr Base, AllocBase; public uint AllocProtect; public IntPtr Size; public uint State, Protect, Type; }
 }
+
+/// <summary>Runs an action when the scope ends, early returns included.</summary>
+sealed class OnExit(Action action) : IDisposable { public void Dispose() => action(); }

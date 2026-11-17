@@ -13,6 +13,8 @@ public static class GameFiles
 {
     public static readonly string Repo = FindRepo();
     static readonly string Cache = Path.Combine(Repo, "work", "cache");
+    /// <summary>work/cache: extracted game files, and (under derived/) answers worked out from them.</summary>
+    public static string CacheDir => Cache;
     static readonly Lazy<VbfArchive> Archive = new(() =>
         new VbfArchive(Environment.GetEnvironmentVariable("FF12_VBF") is { Length: > 0 } v ? v
             : GameInstall.FindSteamInstall()?.DataArchivePath ?? throw new InvalidOperationException("FFXII isn't installed (or set FF12_VBF).")));

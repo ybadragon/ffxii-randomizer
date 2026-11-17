@@ -89,3 +89,29 @@ cliff.
 - **Grown files crash or hang**: see the size rule in [AGENTS.md](../AGENTS.md).
 - Each game crash writes a ~2 GB `.dmp` file in the game's `x64` folder. `tools/dumpinfo` reads it. Delete the dumps
   afterwards.
+
+## Blockers that scripts switch on and off
+
+Story barriers (seals, gates) are not in the minimap picture or the walk mesh. Map scripts switch them with these calls
+(names from ff12-script):
+
+| Call | Meaning |
+| --- | --- |
+| `0x00FE setmapidfloor(layer, id, on)` / `0x00FF setmapidwall(layer, id, on)` | Switch numbered floor / wall pieces on or off |
+| `0x00F6`-`0x00F9` `resetmapidfloor[all]` / `resetmapidwall[all]` | Put them back |
+| `setnavimapindex(n)` | Switch the map to another routing variant (where the variants live is not decoded yet) |
+| `showmapmodel` / `hidemapmodel`, `bgeffectplay` / `bgeffectstop` | The visible barrier (model, glow) |
+| `fieldsign`, `reqenable` / `reqdisable`, `askpos` | Make an actor interactable: walk up, Space, answer a yes/no question |
+
+Worked example, Golmore's glowing seal (`gol_a02`, around (175, 209)): actor `森人の道` checks story >= 1700 (open
+world lowers that) and then makes the seal interactable. Answering yes runs actor `隠し通路`: floor pieces 0, 1, 2, 3
+and 7 on, seal model 17 hidden, model 15 shown, glow effects 41 and 42 stopped, `setnavimapindex 1`. So the seal is a
+door to use, not a missing road. The map's `FF12POS3` entry 7 is at the seal's spot.
+
+Not decoded yet: where the numbered floor and wall pieces (and the second routing variant) are stored, which is what
+a stuck report needs to say "the bot is standing at closed floor piece 7".
+
+Tools in `tools/mapdata`: `actor.cs <ebp> <actor>` prints an actor's code with call names (needs `work/ff12-script`),
+`blockers.cs <ebp>` lists trigger lines with their owner actors, `FF12POS3` points and story checks, `meshes.cs <mpk>`
+lists walk mesh blocks, `posuse.cs <ebp> <n>` finds calls that take constant n, `near.cs <file> x z r` finds stored
+coordinates near a point.

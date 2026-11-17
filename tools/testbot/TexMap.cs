@@ -10,11 +10,11 @@ sealed class TexMap
     public int Ox, Oy;
     public readonly float[,] Edge;
 
-    public TexMap(string file, int ox, int oy)
+    /// <summary>A map package's minimap picture (from tools/MapReader); the bitmap stays the caller's.</summary>
+    public TexMap(Bitmap bmp, int ox, int oy)
     {
         Ox = ox; Oy = oy;
-        using (var eb = new Bitmap(file)) Edge = Minimap.EdgeMap(eb);
-        using var bmp = new Bitmap(file);
+        Edge = Minimap.EdgeMap(bmp);
         W = bmp.Width; H = bmp.Height;
         var data = bmp.LockBits(new Rectangle(0, 0, W, H), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         var px = new int[W * H];

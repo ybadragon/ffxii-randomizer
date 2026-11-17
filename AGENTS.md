@@ -32,7 +32,7 @@ Background: [README.md](README.md) (features, how it works, archive format, layo
 | `app/Ff12Randomizer.Cli` | Developer commands: `list`, `extract`, `install <seed> <options>`, `dryrun`, `buildcheck`, script scans, ... (see `Program.cs`) |
 | `loader/` | The `dinput8.dll` proxy (C++, `loader\build.cmd`) |
 | `third_party/` | Reference code and data: Bartz24's FFModdingWPF (formats), ffgriever's ff12-script / ff12-text (script VM, text encoding) |
-| `tools/` | Developer tools: the in-game test bot, map data readers, crash dump reader ([tools/README.md](tools/README.md)) |
+| `tools/` | Developer tools: the in-game test bot, the map reader (what the game files say about each map), crash dump reader ([tools/README.md](tools/README.md)) |
 | `docs/` | Notes: [game internals](docs/game-internals.md), [testing in game](docs/testing-in-game.md), [manual test checklist](docs/test-checklist.md), [ideas](docs/ideas.md) |
 | `work/` | Git-ignored scratch space: extracted game files, debug pictures |
 

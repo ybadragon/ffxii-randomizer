@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reads everything the test bot needs to know about a map straight from the game's files, on demand:
+       exits, entrances, the walk mesh, the minimap pictures and their variants, and what switches them. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Ff12MapData</RootNamespace>
+    <AssemblyName>Ff12MapReader</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\app\Ff12Randomizer.Core\Ff12Randomizer.Core.csproj" />
+  </ItemGroup>
+
+</Project>

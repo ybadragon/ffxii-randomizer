@@ -8,151 +8,6 @@ using System.Runtime.InteropServices;
 //  get <type> <addr> [n]           type u8/u16/u32/f32; addr hex or exe+hex
 //  put <type> <addr> <value>
 //  find <type> <value>             addresses holding value (writable memory)
-if (args[0] == "fitroute")
-{
-    // fitroute <texture.png> x,z x,z ...: finds scale and offset (pixel = world*s + o) putting the walked points on the
-    // texture's red walkable band; prints the best few.
-    using var tex = new System.Drawing.Bitmap(args[1]);
-    int w = tex.Width, hh = tex.Height;
-    var red = new bool[w, hh];
-    for (int y = 0; y < hh; y++) for (int x = 0; x < w; x++) { var c = tex.GetPixel(x, y); red[x, y] = c.A > 100 && c.R > 150 && c.G < 120; }
-    var pts = args.Skip(2).Select(a => a.Split(',').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray()).ToList();
-    var res = new List<(int score, double s, int ox, int oy)>();
-    for (double s = 0.8; s <= 5.0; s += 0.02)
-    {
-        int best = -1, bx = 0, by = 0;
-        for (int oy = -(int)(400 * s); oy < hh; oy += 2)
-            for (int ox = -(int)(400 * s); ox < w; ox += 2)
-            {
-                int sc = 0;
-                foreach (var pt in pts) { int u = (int)(pt[0] * s) + ox, v = (int)(pt[1] * s) + oy; if (u >= 0 && v >= 0 && u < w && v < hh && red[u, v]) sc++; }
-                if (sc > best) { best = sc; bx = ox; by = oy; }
-            }
-        res.Add((best, s, bx, by));
-    }
-    foreach (var r in res.OrderByDescending(r => r.score).ThenByDescending(r => r.s).Take(8)) Console.WriteLine($"{r.score}/{pts.Count} at scale {r.s:F2} offset ({r.ox}, {r.oy})");
-    return 0;
-}
-if (args[0] == "tim2")
-{
-    // tim2 <file> <outPrefix>: finds every TIM2 image in a file (e.g. menumap_subNN.bin) and writes it as PNG.
-    // TIM2 layout: "TIM2" + version + format + count (16 bytes); per picture a header: totalSize u32, clutSize u32,
-    // imageSize u32, headerSize u16, clutColors u16, picFormat u8, mipmaps u8, clutType u8, imageType u8,
-    // width u16, height u16, then GsTex0/1, flags, then image data and the CLUT. imageType: 1=16bpp 2=24 3=32 4=4bit 5=8bit.
-    var bytes = File.ReadAllBytes(args[1]);
-    int found = 0;
-    for (int at = 0; at + 64 < bytes.Length; at++)
-    {
-        if (bytes[at] != 'T' || bytes[at + 1] != 'I' || bytes[at + 2] != 'M' || bytes[at + 3] != '2') continue;
-        int ph = at + 16;
-        uint total = BitConverter.ToUInt32(bytes, ph), clutSize = BitConverter.ToUInt32(bytes, ph + 4), imgSize = BitConverter.ToUInt32(bytes, ph + 8);
-        int hdr = BitConverter.ToUInt16(bytes, ph + 12), clutColors = BitConverter.ToUInt16(bytes, ph + 14);
-        int clutType = bytes[ph + 18], imgType = bytes[ph + 19];
-        int w = BitConverter.ToUInt16(bytes, ph + 20), ht = BitConverter.ToUInt16(bytes, ph + 22);
-        int img = ph + hdr, clut = img + (int)imgSize;
-        Console.WriteLine($"TIM2 at 0x{at:X}: {w}x{ht} type {imgType} clutType 0x{clutType:X} clutColors {clutColors} imgSize {imgSize} total {total}");
-        if (w == 0 || ht == 0 || img + imgSize > bytes.Length) { Console.WriteLine("  (runs past the end of the file, skipped)"); continue; }
-        if (clut + clutColors * 4 > bytes.Length) { Console.WriteLine("  (palette cut short by the end of the file; missing entries shown magenta)"); Array.Resize(ref bytes, clut + clutColors * 4); }
-        System.Drawing.Color Clut16or32(int i)
-        {
-            if ((clutType & 0x3) == 3) { int o = clut + i * 4; return System.Drawing.Color.FromArgb(Math.Min(255, bytes[o + 3] * 2), bytes[o], bytes[o + 1], bytes[o + 2]); }
-            if ((clutType & 0x3) == 2) { int o = clut + i * 3; return System.Drawing.Color.FromArgb(255, bytes[o], bytes[o + 1], bytes[o + 2]); }
-            int v = BitConverter.ToUInt16(bytes, clut + i * 2);
-            return System.Drawing.Color.FromArgb((v & 0x8000) != 0 ? 255 : 0, (v & 31) * 8, ((v >> 5) & 31) * 8, ((v >> 10) & 31) * 8);
-        }
-        // PS2 8-bit CLUTs are stored in a swizzled ("CSM1") order unless the clut type says otherwise
-        int UnswizzleIndex(int i) => (clutType & 0x80) != 0 ? i : (i & ~0x18) | ((i & 0x08) << 1) | ((i & 0x10) >> 1);
-        using var bmp = new System.Drawing.Bitmap(w, ht, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        for (int y = 0; y < ht; y++)
-            for (int x = 0; x < w; x++)
-            {
-                System.Drawing.Color c;
-                int i = y * w + x;
-                switch (imgType)
-                {
-                    case 5: c = Clut16or32(clutColors == 256 ? UnswizzleIndex(bytes[img + i]) : bytes[img + i]); break;
-                    case 4: { int b = bytes[img + i / 2]; c = Clut16or32((i & 1) == 0 ? b & 15 : b >> 4); break; }
-                    case 3: { int o = img + i * 4; c = System.Drawing.Color.FromArgb(Math.Min(255, bytes[o + 3] * 2), bytes[o], bytes[o + 1], bytes[o + 2]); break; }
-                    case 2: { int o = img + i * 3; c = System.Drawing.Color.FromArgb(255, bytes[o], bytes[o + 1], bytes[o + 2]); break; }
-                    default: { int v = BitConverter.ToUInt16(bytes, img + i * 2); c = System.Drawing.Color.FromArgb(255, (v & 31) * 8, ((v >> 5) & 31) * 8, ((v >> 10) & 31) * 8); break; }
-                }
-                bmp.SetPixel(x, y, c);
-            }
-        bmp.Save($"{args[2]}_{found++:D2}.png");
-        at += 15;
-    }
-    return 0;
-}
-if (args[0] == "mapfit")
-{
-    // mapfit <menumap_subNN.bin> <picture prefix>: for every decoded picture (prefix_NN.png) and every LCMPOS1 block,
-    // finds the offset that puts the most of the block's world points on floor at 4 px per world unit.
-    var bytes = File.ReadAllBytes(args[1]);
-    int blocks = BitConverter.ToInt32(bytes, 0x10);
-    var blockPts = new List<List<(float x, float z)>>();
-    for (int bi = 0; bi < blocks; bi++)
-    {
-        int start = 0x20 + BitConverter.ToUInt16(bytes, 0x14 + bi * 2);
-        int end = bi + 1 < blocks ? 0x20 + BitConverter.ToUInt16(bytes, 0x14 + (bi + 1) * 2) : start + 0x600;
-        var pts = new List<(float, float)>();
-        for (int o = start; o + 16 <= Math.Min(end, bytes.Length); o += 16)
-        {
-            float x = BitConverter.ToSingle(bytes, o), y = BitConverter.ToSingle(bytes, o + 4), z = BitConverter.ToSingle(bytes, o + 8);
-            if (x > 1 && x < 3000 && z > 1 && z < 3000 && y > -60 && y < 300 && float.IsFinite(x)) pts.Add((x, z));
-        }
-        blockPts.Add(pts);
-    }
-    for (int pi = 0; File.Exists($"{args[2]}_{pi:D2}.png"); pi++)
-    {
-        using var pic = new System.Drawing.Bitmap($"{args[2]}_{pi:D2}.png");
-        int w = pic.Width, hh = pic.Height;
-        var bg = pic.GetPixel(2, 2);
-        var floor = new bool[w, hh];
-        for (int y = 0; y < hh; y++) for (int x = 0; x < w; x++)
-        { var c = pic.GetPixel(x, y); floor[x, y] = Math.Abs(c.R - bg.R) + Math.Abs(c.G - bg.G) + Math.Abs(c.B - bg.B) + Math.Abs(c.A - bg.A) > 40; }
-        // distance-tolerant floor: within 4 px of floor counts (exit lines sit on corridor ends)
-        var near = new bool[w, hh];
-        for (int y = 0; y < hh; y++) for (int x = 0; x < w; x++)
-            if (floor[x, y]) for (int dy = -4; dy <= 4; dy++) for (int dx = -4; dx <= 4; dx++)
-            { int ax = x + dx, ay = y + dy; if (ax >= 0 && ay >= 0 && ax < w && ay < hh) near[ax, ay] = true; }
-        for (int bi = 0; bi < blocks; bi++)
-        {
-            var pts = blockPts[bi]; if (pts.Count == 0) continue;
-            int best = -1, bx = 0, by = 0;
-            float minx = pts.Min(p => p.x), maxx = pts.Max(p => p.x), minz = pts.Min(p => p.z), maxz = pts.Max(p => p.z);
-            for (int oy = (int)(-maxz * 4); oy <= hh - (int)(minz * 4); oy++)
-                for (int ox = (int)(-maxx * 4); ox <= w - (int)(minx * 4); ox++)
-                {
-                    int score = 0;
-                    foreach (var (x, z) in pts)
-                    {
-                        int u = (int)(x * 4) + ox, v = (int)(z * 4) + oy;
-                        if (u >= 0 && v >= 0 && u < w && v < hh && near[u, v]) score++;
-                    }
-                    if (score > best) { best = score; bx = ox; by = oy; }
-                }
-            Console.WriteLine($"picture {pi} ({w}x{hh}) block {bi}: {best}/{pts.Count} points on floor at offset ({bx}, {by})");
-        }
-    }
-    return 0;
-}
-if (args[0] == "mmfile")
-{
-    // mmfile <capture.png>...: reads saved minimap captures offline (no game needed). The camera angle is taken from the
-    // file name (..._a<radians>.png) when present. Writes <capture>.read.png next to each: capture | reading.
-    foreach (var file in args.Skip(1))
-    {
-        using var shot = new System.Drawing.Bitmap(file);
-        var am = System.Text.RegularExpressions.Regex.Match(Path.GetFileNameWithoutExtension(file), @"_a(-?\d+(\.\d+)?)$");
-        double? ang = am.Success ? double.Parse(am.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : null;
-        var g = Environment.GetEnvironmentVariable("MMMODE") == "edge" ? Minimap.EdgeGrid(shot, ang) : Minimap.WatershedGrid(shot, ang);
-        var mk = Minimap.Marker(g) ?? (135, 138);
-        int floor = 0; foreach (var c in g) if (c == Minimap.Cell.Floor) floor++;
-        Minimap.SaveDebug(Path.ChangeExtension(file, ".read.png"), shot, g, new() { ((int)mk.x, (int)mk.y) }, ((int)mk.x, (int)mk.y), mk);
-        Console.WriteLine($"{Path.GetFileName(file)}: angle {ang?.ToString("F2") ?? "?"}, floor {floor} px");
-    }
-    return 0;
-}
 var p = Process.GetProcessesByName("FFXII_TZA").FirstOrDefault() ?? throw new Exception("game not running");
 IntPtr h = Native.OpenProcess(0x1F0FFF, false, p.Id);
 long exe = (long)p.MainModule!.BaseAddress;
@@ -440,15 +295,12 @@ switch (args[0])
     case "trip":
         {
             // trip <goalMapHex> [x z] [maxMaps=12]: walks across maps along the fewest-maps route over the game's own exits
-            // (tools/mapdata/exits.csv, read from each map script's trigger lines and the mapjumps they run). On each map it walks
-            // to the exit line, from the inside, then pushes across it; in the goal map it walks to (x, z) when given.
+            // (read from each map script by tools/MapReader). On each map it walks to the exit line from the inside, then
+            // pushes across it; in the goal map it walks to (x, z) when given.
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             int goalMap = Convert.ToInt32(args[1], 16);
             double? gx = args.Length > 3 ? double.Parse(args[2], ci) : null, gz = args.Length > 3 ? double.Parse(args[3], ci) : null;
             int maxMaps = args.Length > 4 ? int.Parse(args[4]) : 12;
-            var exitRows = File.ReadAllLines(Paths.Exits).Skip(1).Select(l => l.Split(','))
-                .Select(f => (map: Convert.ToInt32(f[0], 16), name: f[1], mx: double.Parse(f[3], ci), mz: double.Parse(f[4], ci),
-                              ix: double.Parse(f[5], ci), iz: double.Parse(f[6], ci), dest: Convert.ToInt32(f[7], 16), dname: f[8], ent: int.Parse(f[9]))).ToList();
             string Walk(double x, double z)
             {
                 using var pr = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, string.Format(ci, "tnav {0} {1} 240", x, z)) { UseShellExecute = false, RedirectStandardOutput = true })!;
@@ -458,10 +310,7 @@ switch (args[0])
                 return last;
             }
             ushort MapNow() => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
-            // for the live viewer (memtool viz): maps walked so far, then the planned rest of the chain
-            var mapNames = exitRows.GroupBy(r => r.map).ToDictionary(g => g.Key, g => g.First().name);
-            foreach (var r in exitRows) mapNames.TryAdd(r.dest, r.dname);
-            string NameOf(int id) => mapNames.TryGetValue(id, out var n) ? n : $"0x{id:X}";
+            string NameOf(int id) => Ff12MapData.GameFiles.PlaceName(id);
             string goalLabel = NameOf(goalMap) + (gx is double glx && gz is double glz ? $" ({glx:F0}, {glz:F0})" : "");
             var visited = new List<(int id, string name)>();
             for (int hop = 0; hop <= maxMaps; hop++)
@@ -479,25 +328,33 @@ switch (args[0])
                     LiveState.Trip(visited, visited.Count - 1, -1, (tx, tz), goalLabel, r.StartsWith("arrived") ? "arrived" : "stopped: " + r);
                     return r.StartsWith("arrived") ? 0 : 1;
                 }
-                // fewest-maps route from here
-                var prev = new Dictionary<int, int> { [mapId] = -1 }; var q = new Queue<int>(); q.Enqueue(mapId);
+                // fewest-maps route from here, over each map's exits (read as the search reaches each map)
+                var prev = new Dictionary<int, (int map, Ff12MapData.Exit? exit)> { [mapId] = (-1, null) }; var q = new Queue<int>(); q.Enqueue(mapId);
                 while (q.Count > 0 && !prev.ContainsKey(goalMap))
-                { int m = q.Dequeue(); foreach (var r in exitRows.Where(r => r.map == m)) if (prev.TryAdd(r.dest, m)) q.Enqueue(r.dest); }
+                {
+                    int m = q.Dequeue();
+                    foreach (var x in Ff12MapData.MapInfo.For(m)?.Info.Exits ?? [])
+                        foreach (var (dest, _) in x.Leads) if (prev.TryAdd(dest, (m, x))) q.Enqueue(dest);
+                }
                 if (!prev.ContainsKey(goalMap)) { Console.WriteLine($"trip ended: no route from 0x{mapId:X} to 0x{goalMap:X}"); return 1; }
-                int nextMap = goalMap; while (prev[nextMap] != mapId) nextMap = prev[nextMap];
-                var ex = exitRows.First(r => r.map == mapId && r.dest == nextMap);
-                double dx = ex.mx - ex.ix, dz = ex.mz - ex.iz, len = Math.Max(0.01, Math.Sqrt(dx * dx + dz * dz)); dx /= len; dz /= len;
-                Console.WriteLine($"    heading for the exit to 0x{nextMap:X} ({ex.dname}) at ({ex.mx:F1}, {ex.mz:F1})");
+                int nextMap = goalMap; while (prev[nextMap].map != mapId) nextMap = prev[nextMap].map;
+                var ex = prev[nextMap].exit!;
+                // outwards: from this map's entrance nearest the line (its inside) through the line's middle
+                var here = Ff12MapData.MapInfo.For(mapId)!;
+                var inside = here.Info.Entrances.Where(e => e.X != 0 || e.Z != 0).OrderBy(e => Math.Pow(e.X - ex.Mid.X, 2) + Math.Pow(e.Z - ex.Mid.Z, 2))
+                    .Select(e => (e.X, e.Z)).DefaultIfEmpty((px, pz)).First();
+                double dx = ex.Mid.X - inside.Item1, dz = ex.Mid.Z - inside.Item2, len = Math.Max(0.01, Math.Sqrt(dx * dx + dz * dz)); dx /= len; dz /= len;
+                Console.WriteLine($"    heading for the exit to 0x{nextMap:X} ({NameOf(nextMap)}) at ({ex.Mid.X:F1}, {ex.Mid.Z:F1})");
                 var rest = new List<(int id, string name)>();
-                for (int m = goalMap; m != mapId; m = prev[m]) rest.Insert(0, (m, NameOf(m)));
-                LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, (ex.mx, ex.mz), goalLabel, $"heading for the exit to {ex.dname}");
-                var res = Walk(ex.mx - dx * 2.5, ex.mz - dz * 2.5);
+                for (int m = goalMap; m != mapId; m = prev[m].map) rest.Insert(0, (m, NameOf(m)));
+                LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, $"heading for the exit to {NameOf(nextMap)}");
+                var res = Walk(ex.Mid.X - dx * 2.5, ex.Mid.Z - dz * 2.5);
                 // cross the line: keep walking outwards (from the map's entrance by the line through the line's middle)
                 var push = System.Diagnostics.Stopwatch.StartNew();
                 while (MapNow() == mapId && push.Elapsed.TotalSeconds < 8) { var (qx, _, qz) = Pos(); Steer(qx + dx * 6, qz + dz * 6, 300); Thread.Sleep(50); }
                 var waitSw = System.Diagnostics.Stopwatch.StartNew();
                 while (waitSw.Elapsed.TotalSeconds < 30 && MapNow() == mapId) Thread.Sleep(500);
-                if (MapNow() == mapId) { Console.WriteLine($"trip ended: the exit at ({ex.mx:F1}, {ex.mz:F1}) did not lead out ({res})"); LiveState.Trip(visited, visited.Count - 1, nextMap, (ex.mx, ex.mz), goalLabel, "stopped: the exit did not lead out"); return 1; }
+                if (MapNow() == mapId) { Console.WriteLine($"trip ended: the exit at ({ex.Mid.X:F1}, {ex.Mid.Z:F1}) did not lead out ({res})"); LiveState.Trip(visited, visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, "stopped: the exit did not lead out"); return 1; }
                 Console.WriteLine($"    map changed to 0x{MapNow():X}");
                 // wait for the next map to finish loading: the party position settles near the entrance
                 var settle = System.Diagnostics.Stopwatch.StartNew(); var lastP = Pos(); int still = 0;
@@ -509,25 +366,27 @@ switch (args[0])
         }
     case "tnav":
         {
-            // tnav <x> <z> [seconds]: plans the whole route on the map package's minimap texture (calibrated with mapfind,
-            // cached in texdir/maps.csv) and steers along it; re-plans when it drifts off the route.
+            // tnav <x> <z> [seconds]: plans the whole route on the map package's minimap picture (tools/MapReader: the
+            // package and its world position come from the game's files) and steers along it; re-plans when it drifts off
+            // the route. A map with several minimap variants (what the game shows changes as ways open) uses the variant
+            // that best matches the live minimap.
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             double tx = double.Parse(args[1], ci), tz = double.Parse(args[2], ci), secs = args.Length > 3 ? double.Parse(args[3], ci) : 120;
-            string texdir = Paths.Tex;
             int mapId = BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
-            string? Cached() => File.Exists(Path.Combine(texdir, "maps.csv")) ? File.ReadAllLines(Path.Combine(texdir, "maps.csv")).FirstOrDefault(l => l.StartsWith(mapId + ",")) : null;
-            if (Cached() is null)
-            {
-                Console.WriteLine($"map {mapId} not calibrated yet, running mapfind");
-                using var pr = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"mapfind \"{texdir}\"") { UseShellExecute = false })!;
-                pr.WaitForExit();
-            }
-            var f = Cached()?.Split(',');
-            if (f is null || double.Parse(f[4], ci) < 0.5) { Console.WriteLine($"no reliable texture for map {mapId}: {string.Join(",", f ?? [])}"); return 1; }
-            var tm = new TexMap(Path.Combine(texdir, f[1] + ".png"), int.Parse(f[2]), int.Parse(f[3]));
-            Console.WriteLine($"map {mapId} = {f[1]} offset ({f[2]}, {f[3]})");
+            var info = Ff12MapData.MapInfo.For(mapId);
+            if (info?.Package is not { VariantCount: > 0 } pkg) { Console.WriteLine($"no map package with a minimap picture for map 0x{mapId:X}"); return 1; }
+            int ox = (int)Math.Round(-pkg.Origin.X * 4), oy = (int)Math.Round(-pkg.Origin.Z * 4);
             Input.Focus(p.MainWindowHandle);
-            { var a0 = Align(tm, 12); Console.WriteLine($"aligned by ({a0.dx}, {a0.dy}), score {a0.score:F2}"); }
+            TexMap tm = null!; int variant = 0; double bestScore = -1;
+            for (int v = 0; v < pkg.VariantCount; v++)
+            {
+                var cand = new TexMap(pkg.Minimap(v), ox, oy);
+                var a = Align(cand, 12);
+                if (a.score > bestScore) { bestScore = a.score; tm = cand; variant = v; }
+            }
+            Console.WriteLine($"map 0x{mapId:X} ({info.Place}) = {pkg.Name} variant {variant} of {pkg.VariantCount}, offset ({ox}, {oy}), aligned score {bestScore:F2}");
+            // why the party is stuck at a spot, from the map's own data (barriers, floor that needs another variant, triggers)
+            void Explain(double x, double z) { foreach (var line in info.Explain(new(x, z))) Console.WriteLine("  why: " + line); }
             var alignTimer = System.Diagnostics.Stopwatch.StartNew();
             Input.Focus(p.MainWindowHandle);
             var navDir = Paths.Out("game");
@@ -536,7 +395,7 @@ switch (args[0])
             List<(int x, int y)> route = new(); int idx = 0, steps = 0;
             // for the live viewer (memtool viz): the route in world units, the goal and the walls found on this walk
             var blockedAt = new List<(double x, double z)>();
-            void Live(string status) => LiveState.Route(mapId, route.Select(r => tm.ToWorld(r.x, r.y)), (tx, tz), blockedAt, status);
+            void Live(string status) => LiveState.Route(mapId, variant, route.Select(r => tm.ToWorld(r.x, r.y)), (tx, tz), blockedAt, status);
             var lastCheck = Pos(); var checkTimer = System.Diagnostics.Stopwatch.StartNew(); int stuckTries = 0; double bestGoal = double.MaxValue;
             while (sw.Elapsed.TotalSeconds < secs)
             {
@@ -574,7 +433,7 @@ switch (args[0])
                     double tg = Math.Sqrt((tx - now.x) * (tx - now.x) + (tz - now.z) * (tz - now.z));
                     if (moved < 1)
                     {
-                        if (++stuckTries > 4) { Console.WriteLine($"stuck at {now.x:F2} {now.z:F2}: moved {moved:F2} units in 5 s, {stuckTries - 1} blocks added did not help"); Live("stuck"); return 1; }
+                        if (++stuckTries > 4) { Console.WriteLine($"stuck at {now.x:F2} {now.z:F2}: moved {moved:F2} units in 5 s, {stuckTries - 1} blocks added did not help"); Explain(now.x, now.z); Live("stuck"); return 1; }
                         // a wall the texture doesn't show: block the corridor just ahead, plan around it (this walk only: barriers change with the story)
                         var atp = tm.ToPx(now.x, now.z); var np = tm.ToPx(nx, nz);
                         double ax = np.u - atp.u, az = np.v - atp.v, len = Math.Max(0.01, Math.Sqrt(ax * ax + az * az));
@@ -582,6 +441,7 @@ switch (args[0])
                         tm.AddBlock(bu, bv, 8);
                         blockedAt.Add(tm.ToWorld(bu, bv));
                         Console.WriteLine($"blocked at {now.x:F2} {now.z:F2}: wall ahead at world ({(bu - tm.Ox) / 4:F1}, {(bv - tm.Oy) / 4:F1}) added, re-planning");
+                        Explain(now.x, now.z);
                         Steer(now.x - ax / len * 2, now.z - az / len * 2, 500); // back off from the wall
                         route.Clear();
                     }
@@ -591,254 +451,6 @@ switch (args[0])
             }
             Console.WriteLine($"timeout at {Pos().x:F2} {Pos().z:F2}");
             return 1;
-        }
-    case "mapfind":
-        {
-            // mapfind <texdir> [mmScale=4.63]: finds which map package texture is the current map and its offset
-            // (texture px = world * 4 + offset), by matching the live minimap's wall lines against each texture of the
-            // same area. Caches the answer in <texdir>/maps.csv (mapId,package,ox,oy,score).
-            var ci = System.Globalization.CultureInfo.InvariantCulture;
-            string dir = args[1]; double mmScale = args.Length > 2 ? double.Parse(args[2], ci) : 4.63;
-            int mapId = BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
-            var areaCsv = File.ReadAllLines(Paths.MapAreas);
-            string? script = areaCsv.Select(l => l.Split(',')).Where(f => f.Length >= 2 && int.TryParse(f[0], System.Globalization.NumberStyles.HexNumber, ci, out int id) && id == mapId).Select(f => f[1]).FirstOrDefault();
-            if (script is null) { Console.WriteLine($"map {mapId} not in mapAreas.csv"); return 1; }
-            string prefix = script[..3];
-            var cands = Directory.GetFiles(dir, prefix + "*.png").OrderBy(f => f).ToList();
-            Console.WriteLine($"map {mapId} = {script}; {cands.Count} candidate textures for '{prefix}'");
-            Input.Focus(p.MainWindowHandle);
-            using var mm = Minimap.Capture(p.MainWindowHandle);
-            var (wx, _, wz) = Pos();
-            var mk = Minimap.Marker(Minimap.Grid(mm)) ?? (135, 138);
-            var me = Minimap.EdgeMap(mm);
-            double ca = ConeAngle();
-            var pts = new List<(double dx, double dy, float g)>();
-            for (int y = 24; y < Minimap.Size - 24; y++)
-                for (int x = 24; x < Minimap.Size - 24; x++)
-                {
-                    double dx = x - mk.x, dy = y - mk.y, dist = Math.Sqrt(dx * dx + dy * dy);
-                    if (dist < 16) continue;
-                    double off = Math.Abs(Math.IEEERemainder(Math.Atan2(dy, dx) - ca, 2 * Math.PI));
-                    if (dist < 110 && Math.Abs(off - Minimap.ConeHalfAngle) < 0.12) continue;
-                    pts.Add((dx / mmScale * 4, dy / mmScale * 4, me[x, y]));
-                }
-            var top = pts.OrderByDescending(t => t.g).Take(1200).ToList();
-            var coarse = top.Where((_, i) => i % 4 == 0).ToList();
-            // Exact calibration from the packages' NPS2 records: take the package whose world box contains the party with
-            // floor under it; offset = -origin * 4. Image matching below is only the fallback.
-            {
-                (string pkg, int ox, int oy, int floor)? pick = null;
-                foreach (var file in cands)
-                {
-                    string pkg0 = Path.GetFileNameWithoutExtension(file);
-                    if (Nps2.Get(dir, pkg0) is not { } r) continue;
-                    if (wx < r.x0 - 3 || wz < r.z0 - 3 || wx > r.x0 + r.w + 3 || wz > r.z0 + r.h + 3) continue;
-                    int ox = (int)Math.Round(-r.x0 * 4), oy = (int)Math.Round(-r.z0 * 4);
-                    var tm0 = new TexMap(file, ox, oy);
-                    var (u0, v0) = tm0.ToPx(wx, wz); int fl = 0;
-                    for (int dy = -12; dy <= 12; dy++) for (int dx = -12; dx <= 12; dx++)
-                    { int a = (int)u0 + dx, c = (int)v0 + dy; if (a >= 0 && c >= 0 && a < tm0.W && c < tm0.H && tm0.Floor[a, c]) fl++; }
-                    // The map's own entrances and exit lines (from its script, tools/mapdata/exits.csv) must lie on the package's floor:
-                    // several packages can cover the party's spot (seen: dst_a02 has dst0102 and dst0107), only one has them all.
-                    int exPts = 0, onFloor = 0;
-                    var exitsCsv = Paths.Exits;
-                    if (File.Exists(exitsCsv))
-                        foreach (var ef in File.ReadLines(exitsCsv).Skip(1).Select(l => l.Split(',')).Where(f => Convert.ToInt32(f[0], 16) == mapId))
-                            for (int k = 3; k <= 5; k += 2)
-                            {
-                                var (eu, ev) = tm0.ToPx(double.Parse(ef[k], System.Globalization.CultureInfo.InvariantCulture), double.Parse(ef[k + 1], System.Globalization.CultureInfo.InvariantCulture));
-                                exPts++; bool hit = false;
-                                for (int dy = -10; dy <= 10 && !hit; dy++) for (int dx = -10; dx <= 10 && !hit; dx++)
-                                { int a = (int)eu + dx, c = (int)ev + dy; if (a >= 0 && c >= 0 && a < tm0.W && c < tm0.H && tm0.Floor[a, c]) hit = true; }
-                                if (hit) onFloor++;
-                            }
-                    Console.WriteLine($"  {pkg0}: box ({r.x0:F1},{r.z0:F1}) {r.w}x{r.h} contains the party, {fl} floor px around it, {onFloor}/{exPts} entrance and exit points on its floor");
-                    int score = onFloor * 100000 + fl;
-                    if (fl > 0 && (pick is null || score > pick.Value.floor)) pick = (pkg0, ox, oy, score);
-                }
-                if (pick is { } pk)
-                {
-                    Console.WriteLine($"best: map {mapId} = {pk.pkg} offset ({pk.ox}, {pk.oy}) from its NPS2 record");
-                    var cache0 = Path.Combine(dir, "maps.csv");
-                    var lines0 = File.Exists(cache0) ? File.ReadAllLines(cache0).Where(l => !l.StartsWith(mapId + ",")).ToList() : new List<string>();
-                    lines0.Add($"{mapId},{pk.pkg},{pk.ox},{pk.oy},1.000");
-                    File.WriteAllLines(cache0, lines0);
-                    break;
-                }
-                Console.WriteLine("  no package record contains the party; falling back to image matching");
-            }
-            (string file, double score, int ox, int oy) win = ("", -1, 0, 0);
-            foreach (var file in cands)
-            {
-                using var tex = new System.Drawing.Bitmap(file);
-                var te = Minimap.EdgeMap(tex);
-                int w = tex.Width, hh = tex.Height;
-                double Score(List<(double dx, double dy, float g)> set, int cx, int cy)
-                {
-                    double s = 0;
-                    foreach (var t in set) { int u = cx + (int)t.dx, v = cy + (int)t.dy; if (u >= 0 && v >= 0 && u < w && v < hh) s += te[u, v]; }
-                    return s / set.Count;
-                }
-                // Vaan's texture position (cx, cy) anywhere on the texture; coarse 3 px grid, then refine
-                double best = -1; int bx = 0, by = 0;
-                for (int cy = 0; cy < hh; cy += 3) for (int cx = 0; cx < w; cx += 3) { double s = Score(coarse, cx, cy); if (s > best) { best = s; bx = cx; by = cy; } }
-                for (int cy = by - 4; cy <= by + 4; cy++) for (int cx = bx - 4; cx <= bx + 4; cx++) { double s = Score(top, cx, cy); if (s > best || (cx == bx - 4 && cy == by - 4)) { if (s > best) { best = s; bx = cx; by = cy; } } }
-                best = Score(top, bx, by);
-                int ox = bx - (int)Math.Round(wx * 4), oy = by - (int)Math.Round(wz * 4);
-                Console.WriteLine($"  {Path.GetFileNameWithoutExtension(file)}: {best:F3} offset ({ox}, {oy})");
-                if (best > win.score) win = (file, best, ox, oy);
-            }
-            string pkg = Path.GetFileNameWithoutExtension(win.file);
-            Console.WriteLine($"best: map {mapId} = {pkg} offset ({win.ox}, {win.oy}) score {win.score:F3}");
-            var cache = Path.Combine(dir, "maps.csv");
-            var lines = File.Exists(cache) ? File.ReadAllLines(cache).Where(l => !l.StartsWith(mapId + ",")).ToList() : new List<string>();
-            lines.Add($"{mapId},{pkg},{win.ox},{win.oy},{win.score.ToString("F3", ci)}");
-            File.WriteAllLines(cache, lines);
-            break;
-        }
-    case "texcal":
-        {
-            // texcal <texture.png> [ox0 oy0 radius]: matches the live minimap's wall lines against a map package's minimap
-            // texture over scale and offset (texture px = world * s + o); minimap = 4.63 px/unit around the marker.
-            var ci = System.Globalization.CultureInfo.InvariantCulture;
-            Input.Focus(p.MainWindowHandle);
-            using var mm = Minimap.Capture(p.MainWindowHandle);
-            var (wx, _, wz) = Pos();
-            var mk = Minimap.Marker(Minimap.Grid(mm)) ?? (135, 138);
-            var me = Minimap.EdgeMap(mm);
-            double ca = ConeAngle();
-            var pts = new List<(double dx, double dy, float g)>();
-            for (int y = 24; y < Minimap.Size - 24; y++)
-                for (int x = 24; x < Minimap.Size - 24; x++)
-                {
-                    double dx = x - mk.x, dy = y - mk.y, dist = Math.Sqrt(dx * dx + dy * dy);
-                    if (dist < 16) continue;
-                    double off = Math.Abs(Math.IEEERemainder(Math.Atan2(dy, dx) - ca, 2 * Math.PI));
-                    if (dist < 110 && Math.Abs(off - Minimap.ConeHalfAngle) < 0.12) continue;
-                    pts.Add((dx / 4.63, dy / 4.63, me[x, y]));
-                }
-            var top = pts.OrderByDescending(t => t.g).Take(1200).ToList();
-            using var tex = new System.Drawing.Bitmap(args[1]);
-            var te = Minimap.EdgeMap(tex);
-            int w = tex.Width, hh = tex.Height;
-            int ox0 = args.Length > 3 ? int.Parse(args[2]) : -463, oy0 = args.Length > 3 ? int.Parse(args[3]) : -515, rad = args.Length > 4 ? int.Parse(args[4]) : 60;
-            double best = -1, bs = 0; int bx = 0, by = 0; var perScale = new SortedDictionary<double, double>();
-            for (double s = 3.80; s <= 4.601; s += 0.01)
-                for (int oy = oy0 - rad; oy <= oy0 + rad; oy++)
-                    for (int ox = ox0 - rad; ox <= ox0 + rad; ox++)
-                    {
-                        double cx = wx * s + ox, cy = wz * s + oy, sc = 0;
-                        foreach (var t in top)
-                        {
-                            int u = (int)(cx + t.dx * s), v = (int)(cy + t.dy * s);
-                            if (u >= 0 && v >= 0 && u < w && v < hh) sc += te[u, v];
-                        }
-                        if (sc > best) { best = sc; bs = s; bx = ox; by = oy; }
-                        if (sc > perScale.GetValueOrDefault(Math.Round(s, 2))) perScale[Math.Round(s, 2)] = sc;
-                    }
-            foreach (var (k, v) in perScale) if (Math.Abs(k * 100 % 5) < 0.01) Console.Write($"{k:F2}:{v / top.Count:F3}  ");
-            Console.WriteLine();
-            Console.WriteLine($"best scale {bs:F2} offset ({bx}, {by}) score {best / top.Count:F3} (Vaan at texture {wx * bs + bx:F0},{wz * bs + by:F0})");
-            break;
-        }
-    case "scalescan":
-        {
-            // scalescan <texture.png> [mmScale=4.9]: best match score of the live minimap against the texture for texture
-            // scales 1.5..8 px per world unit (coarse 4 px placement grid).
-            var ci = System.Globalization.CultureInfo.InvariantCulture;
-            double mmScale = args.Length > 2 ? double.Parse(args[2], ci) : 4.9;
-            Input.Focus(p.MainWindowHandle);
-            using var mm = Minimap.Capture(p.MainWindowHandle);
-            var mk = Minimap.Marker(Minimap.Grid(mm)) ?? (135, 138);
-            var me = Minimap.EdgeMap(mm);
-            double ca = ConeAngle();
-            var pts = new List<(double dx, double dy, float g)>();
-            for (int y = 24; y < Minimap.Size - 24; y++)
-                for (int x = 24; x < Minimap.Size - 24; x++)
-                {
-                    double dx = x - mk.x, dy = y - mk.y, dist = Math.Sqrt(dx * dx + dy * dy);
-                    if (dist < 16) continue;
-                    double off = Math.Abs(Math.IEEERemainder(Math.Atan2(dy, dx) - ca, 2 * Math.PI));
-                    if (dist < 110 && Math.Abs(off - Minimap.ConeHalfAngle) < 0.12) continue;
-                    pts.Add((dx / mmScale, dy / mmScale, me[x, y]));
-                }
-            var top = pts.OrderByDescending(t => t.g).Take(400).ToList();
-            using var tex = new System.Drawing.Bitmap(args[1]);
-            var te = Minimap.EdgeMap(tex); int w = tex.Width, hh = tex.Height;
-            for (double s = 1.5; s <= 8.01; s += 0.25)
-            {
-                double best = -1; int bx = 0, by = 0;
-                for (int cy = 0; cy < hh; cy += 4) for (int cx = 0; cx < w; cx += 4)
-                {
-                    double sc = 0;
-                    foreach (var t in top) { int u = cx + (int)(t.dx * s), v = cy + (int)(t.dy * s); if (u >= 0 && v >= 0 && u < w && v < hh) sc += te[u, v]; }
-                    if (sc > best) { best = sc; bx = cx; by = cy; }
-                }
-                Console.WriteLine($"scale {s:F2}: {best / top.Count:F3} at ({bx},{by})");
-            }
-            break;
-        }
-    case "mapcal":
-        {
-            // mapcal <picture prefix> [mmScale=4.63]: aligns the live minimap with each of an area's clean map pictures
-            // (prefix_NN.png, 4 px per world unit) by matching wall edges; prints the best picture and its offset
-            // (picture pixel = world * 4 + offset).
-            var ci = System.Globalization.CultureInfo.InvariantCulture;
-            double mmScale = args.Length > 2 ? double.Parse(args[2], ci) : 4.63;
-            Input.Focus(p.MainWindowHandle);
-            using var mm = Minimap.Capture(p.MainWindowHandle);
-            var (wx, _, wz) = Pos();
-            var g0 = Minimap.Grid(mm); var mk = Minimap.Marker(g0) ?? (135, 138);
-            var mg = Minimap.EdgeMap(mm);
-            double ca = ConeAngle();
-            var pts = new List<(int x, int y, double g)>();
-            for (int y = 24; y < Minimap.Size - 24; y++)
-                for (int x = 24; x < Minimap.Size - 24; x++)
-                {
-                    double dx = x - mk.x, dy = y - mk.y, dist = Math.Sqrt(dx * dx + dy * dy);
-                    if (dist < 16) continue;
-                    double off = Math.Abs(Math.IEEERemainder(Math.Atan2(dy, dx) - ca, 2 * Math.PI));
-                    if (dist < 110 && Math.Abs(off - Minimap.ConeHalfAngle) < 0.12) continue;
-                    pts.Add((x, y, mg[x, y]));
-                }
-            var top = pts.OrderByDescending(t => t.g).Take(1500).Select(t => ((t.x - mk.x) * 4 / mmScale, (t.y - mk.y) * 4 / mmScale)).ToList();
-            // Shape matching: sample the minimap's floor (+1) and outside (-1) pixels; the score of a placement is how
-            // much floor lands on picture floor minus how much outside does.
-            var gm = Minimap.Grid(mm, ca);
-            var shape = new List<(double dx, double dy, int wgt)>();
-            for (int y = 26; y < Minimap.Size - 26; y += 2)
-                for (int x = 26; x < Minimap.Size - 26; x += 2)
-                {
-                    if ((x - mk.x) * (x - mk.x) + (y - mk.y) * (y - mk.y) < 196) continue;
-                    int wgt = gm[x, y] == Minimap.Cell.Floor ? 1 : gm[x, y] == Minimap.Cell.Outside ? -1 : 0;
-                    if (wgt != 0) shape.Add(((x - mk.x) * 4 / mmScale, (y - mk.y) * 4 / mmScale, wgt));
-                }
-            var results = new List<(string file, double score, int ox, int oy)>();
-            for (int pi = 0; File.Exists($"{args[1]}_{pi:D2}.png"); pi++)
-            {
-                using var pic = new System.Drawing.Bitmap($"{args[1]}_{pi:D2}.png");
-                var pg = Minimap.FloorMask(pic);
-                int w = pic.Width, hh = pic.Height;
-                double Score(int px0, int py0)
-                {
-                    double s = 0;
-                    foreach (var (ddx, ddy, wgt) in shape)
-                    {
-                        int u = px0 + (int)Math.Round(ddx), v = py0 + (int)Math.Round(ddy);
-                        if (u >= 0 && v >= 0 && u < w && v < hh) s += wgt * pg[u, v]; else s -= wgt > 0 ? 1 : 0;
-                    }
-                    return s / shape.Count;
-                }
-                double best = -1; int bx = 0, by = 0;
-                for (int py0 = 0; py0 < hh; py0 += 3) for (int px0 = 0; px0 < w; px0 += 3) { double s = Score(px0, py0); if (s > best) { best = s; bx = px0; by = py0; } }
-                for (int py0 = by - 3; py0 <= by + 3; py0++) for (int px0 = bx - 3; px0 <= bx + 3; px0++) { double s = Score(px0, py0); if (s > best) { best = s; bx = px0; by = py0; } }
-                int ox = bx - (int)Math.Round(wx * 4), oy = by - (int)Math.Round(wz * 4);
-                results.Add(($"{args[1]}_{pi:D2}.png", best, ox, oy));
-                Console.WriteLine($"picture {pi} ({w}x{hh}): match {best:F3}, Vaan at picture ({bx},{by}), offset ({ox}, {oy})");
-            }
-            var win = results.OrderByDescending(r => r.score).First();
-            Console.WriteLine($"best: {Path.GetFileName(win.file)} offset ({win.ox}, {win.oy}) for map {BitConverter.ToUInt16(Read(exe + 0x20441F0, 2))}");
-            break;
         }
     case "minimap":
         {
@@ -966,26 +578,6 @@ switch (args[0])
                 var v = BitConverter.GetBytes(float.Parse(args[2 + i], System.Globalization.CultureInfo.InvariantCulture));
                 Native.WriteProcessMemory(h, (IntPtr)(a + i * 4), v, (IntPtr)4, out _);
             }
-            break;
-        }
-    case "godmode":
-        {
-            // godmode [seconds=3600]: test-only; keeps every party member at full HP (current = max in both party HP
-            // tables found at exe+1F7B088 and exe+21A80A0, 0xC0 bytes per member) so walking tests can't be wiped.
-            double secs = args.Length > 1 ? double.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 3600;
-            var sw = System.Diagnostics.Stopwatch.StartNew(); int refills = 0;
-            while (sw.Elapsed.TotalSeconds < secs && !p.HasExited)
-            {
-                foreach (long tbl in new long[] { exe + 0x1F7B088, exe + 0x21A80A0 })
-                    for (int i = 0; i < 6; i++)
-                    {
-                        var b = Read(tbl + i * 0xC0, 8);
-                        uint cur = BitConverter.ToUInt32(b, 0), max = BitConverter.ToUInt32(b, 4);
-                        if (max > 0 && max < 100000 && cur < max) { Native.WriteProcessMemory(h, (IntPtr)(tbl + i * 0xC0), BitConverter.GetBytes(max), (IntPtr)4, out _); refills++; }
-                    }
-                Thread.Sleep(200);
-            }
-            Console.WriteLine($"godmode ended, {refills} refills");
             break;
         }
     case "posscan":

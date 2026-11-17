@@ -51,7 +51,7 @@ Map script data, at offsets relative to the script base (u32 at file offset 0x10
   id. Its `PUSHII map; PUSHII entrance; PUSHII 0; CALLPOPA 0x8D` is where that exit leads. One exit can lead to
   different maps depending on the story.
 
-`tools/mapdata/exits.cs` reads all of this. `tools/mapdata/exits.csv` holds every map's exits (723).
+`tools/MapReader` (`ScriptInfo`) reads all of this. The game has 723 exits across its maps.
 
 Scripts also hold a `FF12POS3` table (positions with sizes, such as spawn areas) and `FF12AR03` (not decoded).
 
@@ -59,23 +59,27 @@ Scripts also hold a `FF12POS3` table (positions with sizes, such as spawn areas)
 
 `ps2data/plan_master/map_ctrl/<area>/<package>/bin/<package>.mpk`, for example `dst01/dst0101/bin/dst0101.mpk`.
 Package names don't reliably follow the map name, and several packages can cover the same spot (`dst_a02`'s spot is
-covered by both `dst0102` and `dst0107`). The right package is the one whose floor contains all of the map's entrances and exits (`memtool mapfind`).
+covered by both `dst0102` and `dst0107`). The right package is the one whose walk mesh holds the map's entrances (`MapInfo` in `tools/MapReader` matches them this way).
 
-- **Minimap picture**: the last TIM2 texture at least 512 wide. Red is walkable floor, the cyan glow is walls, black is
-  outside. Story barriers (for example Golmore's glowing seal) are not in it. `tools/testbot/scripts/extract-maps.sh`
-  extracts them all. TIM2 here is PS2 8-bit with a 256-colour RGBA palette (`memtool tim2` decodes it).
+- **Minimap pictures**: the TIM2 textures at least 512 wide, one per minimap variant (`setnavimapindex n` shows
+  picture n). Red is walkable floor, the cyan glow is walls, black is outside. Where variants differ is where the game
+  opens or closes a way (Golmore: variant 1 adds the passage at the Road of Verdant Praise exit). TIM2 here is PS2
+  8-bit with a 256-colour RGBA palette (`Tim2` in `tools/MapReader`).
 - **NPS2 record**: the 16-byte-aligned tag `NPS2`. At tag+16 are floats (x0, z0, width, height): the world point at
   the picture's top-left and the map's size. Picture pixel = (world - origin) x 4.
 - **Walk mesh**: a block starting with u32 1, then u16 counts (vertices, triangles, edges, groups), u32 0x30, then
   section offsets relative to the block:
   - vertices: f32 x, z
   - triangles: u16 a, b, c, group
-  - portal edges between groups: u16 a, b, 0xFF, attr
+  - edges: u16 a, b, condition, kind. Condition 0x00FF on ordinary edges; otherwise the high byte is a condition
+    number (0 to 31) and the crossing is conditional. Kind 0x2F joins two cells, 0x08 is a wall. Conditional
+    crossings sit at exits, gates and barriers: Golmore's seal is condition 1. Which script call opens which condition
+    number is not known yet.
   - group vertex lists
   - a 128 x 128 u16 table, probably next-hop routing between groups
 
-  It lines up exactly with the minimap picture. It is the floor the game's AI routes over. `tools/mapdata/navdraw.cs`
-  draws it.
+  It lines up exactly with the minimap picture. It is the floor the game's AI routes over; a few triangles reach past the drawn floor.
+  `mapdata.cs draw` draws it.
 
 Other files: `ps2data/image/ff12/myoshiok/us/worldmap/menumap_subNN.bin` (NN = area id - 1, from `menumap_world.h`)
 holds the coarse menu-map pictures and `LCMPOS1` points. Those points are **not** exits: walking to one led onto a
@@ -99,7 +103,7 @@ Story barriers (seals, gates) are not in the minimap picture or the walk mesh. M
 | --- | --- |
 | `0x00FE setmapidfloor(layer, id, on)` / `0x00FF setmapidwall(layer, id, on)` | Switch numbered floor / wall pieces on or off |
 | `0x00F6`-`0x00F9` `resetmapidfloor[all]` / `resetmapidwall[all]` | Put them back |
-| `setnavimapindex(n)` | Switch the map to another routing variant (where the variants live is not decoded yet) |
+| `0x021B setnavimapindex(n)` | Show minimap variant n (the package's n-th whole-map picture) |
 | `showmapmodel` / `hidemapmodel`, `bgeffectplay` / `bgeffectstop` | The visible barrier (model, glow) |
 | `fieldsign`, `reqenable` / `reqdisable`, `askpos` | Make an actor interactable: walk up, Space, answer a yes/no question |
 
@@ -108,10 +112,9 @@ world lowers that) and then makes the seal interactable. Answering yes runs acto
 and 7 on, seal model 17 hidden, model 15 shown, glow effects 41 and 42 stopped, `setnavimapindex 1`. So the seal is a
 door to use, not a missing road. The map's `FF12POS3` entry 7 is at the seal's spot.
 
-Not decoded yet: where the numbered floor and wall pieces (and the second routing variant) are stored, which is what
-a stuck report needs to say "the bot is standing at closed floor piece 7".
+The first argument of the floor and wall calls is not a layer: monster scripts call them too (over 170,000 calls),
+probably to limit where each character may walk. Where the numbered pieces are stored is not decoded yet.
 
-Tools in `tools/mapdata`: `actor.cs <ebp> <actor>` prints an actor's code with call names (needs `work/ff12-script`),
-`blockers.cs <ebp>` lists trigger lines with their owner actors, `FF12POS3` points and story checks, `meshes.cs <mpk>`
-lists walk mesh blocks, `posuse.cs <ebp> <n>` finds calls that take constant n, `near.cs <file> x z r` finds stored
-coordinates near a point.
+What the reader can already tell from the data, per map: barrier crossings, floor that changes between minimap
+variants, and which actors switch variants (story checks, whether the player uses them, whether it depends on the
+previous map). `mapdata.cs explain <map> <x> <z>` and the bot's `why:` lines use them.

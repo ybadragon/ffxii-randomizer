@@ -26,9 +26,9 @@ sealed class VizForm : Form
     LiveState.RouteState? _route; LiveState.TripState? _trip;
     DateTime _routeTime, _tripTime;
 
-    // static data
-    readonly Dictionary<int, (string script, string place)> _names = new();
-    readonly List<(int map, int dest, List<(float ax, float az, float bx, float bz)> segs)> _exits = new();
+    // current map's exits, from the map reader: where each leads and its trigger line
+    List<(int dest, List<(double ax, double az, double bx, double bz)> segs)> _exits = new();
+    int _variant = -1, _loading = -1;
 
     static readonly Color Back = Color.FromArgb(11, 15, 23), Panel = Color.FromArgb(20, 27, 40), Muted = Color.FromArgb(140, 155, 180),
         Gold = Color.FromArgb(255, 196, 64), Ice = Color.FromArgb(150, 225, 255), Hero = Color.FromArgb(255, 120, 60), Bad = Color.FromArgb(255, 80, 80);
@@ -45,34 +45,22 @@ sealed class VizForm : Form
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
         KeyPreview = true;
         KeyDown += (_, e) => { if (e.KeyCode == Keys.T) TopMost = !TopMost; };
-        LoadStatic();
         _timer.Tick += (_, _) => Tick();
         _timer.Start();
     }
 
-    void LoadStatic()
-    {
-        var ci = CultureInfo.InvariantCulture;
-        if (File.Exists(Paths.MapNames))
-            foreach (var f in File.ReadLines(Paths.MapNames).Skip(1).Select(l => l.Split(',')).Where(f => f.Length >= 3))
-                _names[Convert.ToInt32(f[0], 16)] = (f[1], f[2]);
-        if (File.Exists(Paths.Exits))
-            foreach (var f in File.ReadLines(Paths.Exits).Skip(1).Select(l => l.Split(',')).Where(f => f.Length >= 11))
-            {
-                var segs = f[10].Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Split(':').Select(v => float.Parse(v, ci)).ToArray())
-                    .Select(v => (v[0], v[1], v[2], v[3])).ToList();
-                _exits.Add((Convert.ToInt32(f[0], 16), Convert.ToInt32(f[7], 16), segs));
-            }
-    }
-
-    string PlaceOf(int id) => _names.TryGetValue(id, out var n) ? (n.place.Length > 0 ? n.place : n.script) : $"map 0x{id:X}";
+    static string PlaceOf(int id) => Ff12MapData.GameFiles.PlaceName(id);
 
     void Tick()
     {
         int map = _map();
         var (x, _, z) = _pos();
-        if (map != _mapId) { _mapId = map; _tex?.Dispose(); _tex = null; _trail.Clear(); _nextLookup = DateTime.MinValue; }
-        if (_tex is null && DateTime.Now >= _nextLookup) { LoadMap(); _nextLookup = DateTime.Now.AddSeconds(1); }
+        Reload(LiveState.RouteFile, ref _routeTime, ref _route);
+        Reload(LiveState.TripFile, ref _tripTime, ref _trip);
+        // show the minimap variant the walk is using on this map (variant 0 until a walk says otherwise)
+        int wantVariant = _route is { } rt && rt.Map == map ? rt.Variant : 0;
+        if (map != _mapId) { _mapId = map; _tex?.Dispose(); _tex = null; _variant = -1; _trail.Clear(); _exits = new(); }
+        if (_variant != wantVariant && _loading < 0) LoadMap(map, wantVariant);
         if (x != 0 || z != 0)
         {
             var last = _trail.Count > 0 ? _trail[^1] : (x: float.NaN, z: float.NaN);
@@ -81,8 +69,6 @@ sealed class VizForm : Form
             if (d > 0.15) { _trail.Add((x, z)); if (_trail.Count > 6000) _trail.RemoveAt(0); }
             _at = (x, z);
         }
-        Reload(LiveState.RouteFile, ref _routeTime, ref _route);
-        Reload(LiveState.TripFile, ref _tripTime, ref _trip);
         Invalidate();
     }
 
@@ -94,35 +80,45 @@ sealed class VizForm : Form
         value = LiveState.Load<T>(file) ?? value;
     }
 
-    void LoadMap()
+    // Reads the map from the game's files off the window's thread (the first read of an area takes a few seconds).
+    void LoadMap(int map, int variant)
     {
-        _script = _names.TryGetValue(_mapId, out var n) ? n.script : $"0x{_mapId:X}";
-        _place = PlaceOf(_mapId);
-        var cache = Path.Combine(Paths.Tex, "maps.csv");
-        var row = File.Exists(cache) ? File.ReadLines(cache).FirstOrDefault(l => l.StartsWith(_mapId + ",")) : null;
-        if (row is null) return;
-        var f = row.Split(',');
-        var file = Path.Combine(Paths.Tex, f[1] + ".png");
-        if (!File.Exists(file)) return;
-        _ox = int.Parse(f[2]); _oy = int.Parse(f[3]);
-        (_tex, _crop) = Prepare(file);
-        // widen the view to take in this map's exit lines that lie near the picture (the trigger lines sit just past the
-        // drawn floor); exits far away are shown as arrows on the edge instead
-        var content = _crop;
-        foreach (var ex in _exits.Where(x => x.map == _mapId))
-            foreach (var sg in ex.segs)
-                foreach (var (wx, wz) in new[] { (sg.ax, sg.az), (sg.bx, sg.bz) })
-                {
-                    int u = (int)(wx * 4 + _ox), v = (int)(wz * 4 + _oy);
-                    if (u > content.Left - 160 && u < content.Right + 160 && v > content.Top - 160 && v < content.Bottom + 160)
-                        _crop = Rectangle.Union(_crop, Rectangle.FromLTRB(u - 40, v - 50, u + 40, v + 30));
-                }
+        _loading = map;
+        Task.Run(() =>
+        {
+            var info = Ff12MapData.MapInfo.For(map);
+            var exits = info?.Info.Exits.SelectMany(x => x.Leads.Select(l => (l.Map, x.Line.Select(s => (s.A.X, s.A.Z, s.B.X, s.B.Z)).ToList()))).ToList() ?? new();
+            Bitmap? tex = null; Rectangle crop = default; int ox = 0, oy = 0;
+            if (info?.Package is { VariantCount: > 0 } pkg)
+            {
+                ox = (int)Math.Round(-pkg.Origin.X * 4); oy = (int)Math.Round(-pkg.Origin.Z * 4);
+                lock (pkg) (tex, crop) = Prepare(pkg.Minimap(Math.Min(variant, pkg.VariantCount - 1)));
+                // widen the view to take in this map's exit lines that lie near the picture (the trigger lines sit just
+                // past the drawn floor); exits far away are shown as arrows on the edge instead
+                var content = crop;
+                foreach (var (_, segs) in exits)
+                    foreach (var sg in segs)
+                        foreach (var (wx, wz) in new[] { (sg.Item1, sg.Item2), (sg.Item3, sg.Item4) })
+                        {
+                            int u = (int)(wx * 4 + ox), v = (int)(wz * 4 + oy);
+                            if (u > content.Left - 160 && u < content.Right + 160 && v > content.Top - 160 && v < content.Bottom + 160)
+                                crop = Rectangle.Union(crop, Rectangle.FromLTRB(u - 40, v - 50, u + 40, v + 30));
+                        }
+            }
+            BeginInvoke(() =>
+            {
+                _loading = -1;
+                if (map != _mapId) { tex?.Dispose(); return; }
+                _tex?.Dispose();
+                _tex = tex; _crop = crop; _ox = ox; _oy = oy; _variant = variant; _exits = exits;
+                _place = PlaceOf(map); _script = (info?.Script ?? $"0x{map:X}") + (info?.Package is { VariantCount: > 1 } p ? $" · variant {variant}" : "");
+            });
+        });
     }
 
     // The package picture with its black outside made transparent, and the box around what's drawn.
-    static (Bitmap, Rectangle) Prepare(string file)
+    static (Bitmap, Rectangle) Prepare(Bitmap src)
     {
-        using var src = new Bitmap(file);
         var bmp = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppArgb);
         using (var g = Graphics.FromImage(bmp)) g.DrawImage(src, 0, 0, src.Width, src.Height);
         var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
@@ -174,7 +170,7 @@ sealed class VizForm : Form
 
         // exits of this map, labelled with where they lead; the one the trip is heading for in gold
         int next = _trip is { } tr && tr.ChainIds.Length > tr.Current && tr.Current >= 0 && tr.ChainIds[tr.Current] == _mapId ? tr.NextMap : -1;
-        foreach (var ex in _exits.Where(x => x.map == _mapId).GroupBy(x => x.dest).Select(gr => gr.First()))
+        foreach (var ex in _exits.GroupBy(x => x.dest).Select(gr => gr.First()))
         {
             bool target = ex.dest == next;
             using var pen = new Pen(target ? Gold : Color.FromArgb(200, Ice), target ? 6f : 3.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
@@ -248,7 +244,6 @@ sealed class VizForm : Form
         TextRenderer.DrawText(g, _script, _small, new Point(14 + titleW + 4, 20), Muted);
         // the trip's step, plus the walk's own state when it says more (going around a wall, stuck)
         string status = _trip?.Status ?? "";
-        foreach (var (script, place) in _names.Values) if (place.Length > 0 && status.Contains(script)) status = status.Replace(script, place);
         if (_route is { } r && r.Map == _mapId && r.Status is not ("walking" or "arrived" or "map changed"))
             status = status.Length > 0 ? $"{status} · {r.Status}" : r.Status;
         TextRenderer.DrawText(g, status, _small, new Rectangle(w - 380, 16, 366, 24), status.StartsWith("stuck") || status.StartsWith("stopped") ? Bad : Gold,

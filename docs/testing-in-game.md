@@ -79,16 +79,16 @@ waiting for it. When it reports `blocked` or `stuck`, take a screenshot before d
 
 How it works, and what it has taught us:
 
-- **Route over maps**: `tools/mapdata/exits.csv`, read from the map scripts. Each map's exits come from its trigger
-  lines and their mapjumps ([game internals](game-internals.md#map-scripts-ebp)). The bot walks to a point just
-  inside the line, then keeps walking outward until the map changes. Regenerate the table with
-  `dotnet run exits.cs -- csv exits.csv` in `tools/mapdata`.
+- **Route over maps**: each map's exits come from its script's trigger lines and their mapjumps, read on demand by
+  `tools/MapReader` ([game internals](game-internals.md#map-scripts-ebp)). The bot walks to a point just inside the
+  line, then keeps walking outward until the map changes.
 - **Route on a map**: A* over the map package's minimap picture, weighted to stay away from walls. It re-aligns to the
-  live minimap every 3 seconds. Pictures come from `scripts/extract-maps.sh`, and `mapfind` caches which package goes
-  with which map in `work/mapres/tex/maps.csv`. If a walk goes into a wall from the start, check that cache first:
-  the wrong package was once picked for `dst_a02`.
+  live minimap every 3 seconds. The picture is the map package's, matched by the map's entrances; on a map with
+  several minimap variants the bot uses the one that best matches the live minimap (`tnav` prints which).
 - **Stuck detection**: under 1 unit of movement in 5 seconds marks a wall just ahead and plans around it. The bot
-  gives up after 4 tries. These walls last for **one walk only**. Story barriers open later in the game, so never
+  gives up after 4 tries. Each time it prints `why:` lines from the map data: off the walk mesh, a barrier crossing,
+  floor that only exists in another minimap variant (and what switches it), a trigger line, or nothing (then look at a
+  screenshot: probably a battle, a dialog or an NPC). These walls last for **one walk only**. Story barriers open later in the game, so never
   save them.
 - **Monsters attack while walking.** Use `exp_level=99` and `exp_weak=<text>`. There is no working god mode: the HP
   values in memory are display copies.

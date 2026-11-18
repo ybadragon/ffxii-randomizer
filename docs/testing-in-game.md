@@ -113,6 +113,14 @@ How it works, and what it has taught us:
   floor that only exists in another minimap variant (and what switches it), a trigger line, or nothing (then look at a
   screenshot: probably a battle, a dialog or an NPC). These walls last for **one walk only**. Story barriers open later in the game, so never
   save them.
+- **Space with nothing to talk to opens the battle menu** ("Attack / No Available Targets"), which holds the party
+  still; C closes it, but not while the flee key (Ctrl) is held. Stuck walks now do this. Crystals and NPCs answer
+  Space only from very close (about half a unit; a crystal from one unit away opened the battle menu), so walk up with
+  `goto` or use `teleport touch` for crystals.
+- **Stopping a sweep**: TaskStop on the background command leaves `sweep.sh` and its `memtool trip` running; the sweep
+  is started with its pid saved (`bash tools/testbot/scripts/sweep.sh ... & echo $! > work/bot/sweep.pid`) so it can be killed. Two sweeps at once fight over the keys.
+- **Boot crash**: a "Microsoft Visual C++ Runtime Library / Runtime Error!" at launch is the NVIDIA shader cache at
+  256 MB (`trial.sh` deletes it; `game.ps1` doesn't).
 - **Monsters attack while walking.** Use `exp_level=99` and `exp_weak=<text>`; `trip` also runs god mode (above), and
   holds the flee key.
 - **Separate pieces of floor**: the walk mesh's wall edges (kind 0x08) split a map into pieces, even where two

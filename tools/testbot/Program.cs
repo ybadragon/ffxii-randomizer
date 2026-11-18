@@ -484,6 +484,7 @@ switch (args[0])
             // where an exit really led this trip: some exits lead to different maps at different story points (Southgate's
             // road east goes to Throne Road 0xEC or 0xFD); once one is taken, plan with the map it led to
             var ledTo = new Dictionary<(int map, int trigger), int>(); (int map, int trigger)? lastExit = null;
+            var arrivedAt = new Dictionary<(int map, int ent), (double x, double z)>(); IReadOnlyList<(int Map, int Entrance)> lastLeads = [];
             for (int hop = 0; hop <= maxMaps; hop++)
             {
                 // Heartbeat: whoever supervises the run touches work/bot/heartbeat; when it is older than 20 minutes the
@@ -499,7 +500,13 @@ switch (args[0])
                 var (px, _, pz) = Pos();
                 string name = NameOf(mapId);
                 visited.Add((mapId, name));
-                if (lastExit is { } le && le.map != mapId) ledTo[le] = mapId;
+                if (lastExit is { } le && le.map != mapId)
+                {
+                    ledTo[le] = mapId;
+                    // where the party really lands: an entrance's table spot can sit on another piece of floor (Starfall
+                    // Field from Shimmering Horizons), and planning from it sent the trip back and forth
+                    foreach (var (d, e) in lastLeads) if (d == mapId) arrivedAt[(mapId, e)] = (px, pz);
+                }
                 lastExit = null;
                 Console.WriteLine($"[{hop}] map 0x{mapId:X} ({name}) at ({px:F1}, {pz:F1})");
                 if (mapId == goalMap)
@@ -519,7 +526,7 @@ switch (args[0])
                 bool teleports = Environment.GetEnvironmentVariable("FF12_BOT_TELEPORT") != "0";
                 var touchedSet = TeleportLines().ToHashSet();
                 double Span((double x, double z) a, (double x, double z) b) => Math.Sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z));
-                (double x, double z) EntranceOf(int map, int ent) =>
+                (double x, double z) EntranceOf(int map, int ent) => arrivedAt.TryGetValue((map, ent), out var seen) ? seen :
                     Ff12MapData.ScriptInfo.For(NameOf0(map)) is { } si && ent < si.Entrances.Count ? (si.Entrances[ent].X, si.Entrances[ent].Z) : (0, 0);
                 // Exits of this map the party can't reach from where it stands (quicksand, floor a switch cut off): checked
                 // on the minimap variant that matches the live minimap, the picture tnav walks by. Only with a confident
@@ -614,7 +621,7 @@ switch (args[0])
                 LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, $"heading for the exit to {NameOf(nextMap)}");
                 // read the next map (package match, minimap pictures) while walking this one, so the change doesn't wait on it
                 var prefetch = Task.Run(() => { if (Ff12MapData.MapInfo.For(nextMap)?.Package is { } np) for (int v = 0; v < np.VariantCount; v++) np.Minimap(v); });
-                lastExit = (mapId, ex.TriggerId);
+                lastExit = (mapId, ex.TriggerId); lastLeads = ex.Leads;
                 var res = Walk(ex.Mid.X - dx * (ex.Interact ? 1.2 : 2.5), ex.Mid.Z - dz * (ex.Interact ? 1.2 : 2.5));
                 var push = System.Diagnostics.Stopwatch.StartNew();
                 if (ex.Interact)

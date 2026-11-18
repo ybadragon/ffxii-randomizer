@@ -53,7 +53,7 @@ public sealed class ScriptInfo
     public IReadOnlyList<(int Index, double X, double Y, double Z, double Width, double Depth)> Points { get; }
     public IReadOnlyList<VariantSwitch> VariantSwitches { get; }
 
-    public static ScriptInfo? For(string scriptName) =>
+    public static ScriptInfo? For(string scriptName) => scriptName.Length < 5 ? null :
         GameFiles.Get($"ps2data/plan_master/us/plan_map/{scriptName[..5]}/{scriptName}/global/{scriptName}.ebp") is { Length: > 0x80 } b ? new ScriptInfo(b) : null;
 
     public ScriptInfo(byte[] b)

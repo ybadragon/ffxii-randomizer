@@ -14,6 +14,10 @@ want="$*"
 echo "== sweep $(date +%H:%M:%S)" | tee -a $LOG
 while read -r item map place; do
   [ -z "$item" ] && continue
+  # heartbeat: the supervisor touches work/bot/heartbeat; older than 20 minutes means nobody is watching, so stop
+  if [ -f work/bot/heartbeat ] && [ $(( $(date +%s) - $(stat -c %Y work/bot/heartbeat) )) -gt 1200 ]; then
+    echo "SWEEP STOPPED: no heartbeat for 20 minutes" | tee -a $LOG; break
+  fi
   if [ -n "$want" ]; then echo " $want " | grep -qi " $item " || continue; fi
   touched | grep -qx "$item" && { echo "SKIP $item $place (touched)"; continue; }
   echo "== leg to $place (0x$map, crystal 0x$item) $(date +%H:%M:%S)"

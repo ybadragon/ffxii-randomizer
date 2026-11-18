@@ -449,6 +449,15 @@ switch (args[0])
             int retries = 0; var unusable = new HashSet<(int map, int trigger)>();
             for (int hop = 0; hop <= maxMaps; hop++)
             {
+                // Heartbeat: whoever supervises the run touches work/bot/heartbeat; when it is older than 20 minutes the
+                // supervisor is gone (e.g. out of usage), so stop here, keys released, with the game paused (Escape).
+                var beat = Path.Combine(Paths.Out(""), "heartbeat");
+                if (File.Exists(beat) && (DateTime.Now - File.GetLastWriteTime(beat)).TotalMinutes > 20)
+                {
+                    Input.ReleaseAll(); Input.Focus(p.MainWindowHandle); Input.Hold([(char)0x1B], 120);
+                    Console.WriteLine("trip ended: no heartbeat for 20 minutes (nobody watching); game paused");
+                    return 1;
+                }
                 int mapId = MapNow();
                 var (px, _, pz) = Pos();
                 string name = NameOf(mapId);

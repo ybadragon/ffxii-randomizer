@@ -11,7 +11,8 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Rabanastre, Giza Plains, Ozmone Plain | Walking from South Bank Village through Giza and the Ozmone Plain to The Needlebrake | 2026-11-18 |
 | The Needlebrake (gol_a02) | The hidden path (森人の道, Space at (271.0, 149.1)): "The path to Eruyt Village is gone. Speak to the Wood" opens it at story 420 | 2026-11-18 |
 | Road of Verdant Praise (vic_a03), The Spiritwood (vic_a02) | Reached through the hidden path | 2026-11-18 |
-| Teleport crystals | Touched and teleported between: Southgate, West Barbican, South Bank Village, Babbling Vale, Banks of the Sogoht, Yensa Border Tunnel, Road of Verdant Praise | 2026-11-17/18 |
+| Teleport crystals | Touched and teleported between: Southgate, West Barbican, South Bank Village, Babbling Vale, Banks of the Sogoht, Yensa Border Tunnel, Road of Verdant Praise, The Parting Glade | 2026-11-17/18 |
+| Golmore Jungle | With Lente's Tear (given by the bot), through the seal to Whisperleaf Way and The Parting Glade | 2026-11-18 |
 | Zertinan Caverns | Hourglass Basin's boulder ("Space Boulder") changes the quicksand; the caverns lead out through Athroza Quicksands and The Balamka Fault to the Yensa side | 2026-11-18 |
 
 ## Blocked: worth a look
@@ -26,7 +27,7 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 ## Not tested: the bot can't route there yet
 
 Most failed legs of the crystal sweep were the bot's own limits, not the game: airship flights (aerodrome menus), Barheim
-Passage's inner links, Ridorana, Archades, the Feywood. The exit reader finds 1127 of the game's 1776 map links
+Passage's inner links, Ridorana, Archades, the Feywood (from Golmore through gol_c01 and gol_d01). The exit reader finds 1185 of the game's 1776 map links
 (`prefetchdata/ff12mapjump_custom_nocrystal.csv`).
 
 ## Leads

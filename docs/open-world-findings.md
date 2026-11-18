@@ -1,5 +1,7 @@
 # Open world: what the test bot found
 
+**Most important for a player (2026-11-18):** (1) walking into Freezing Gorge (Paramina Rift) before the story gets there jumps the story from 420 to 1973 (seen in game); (2) after riding a chocobo to the Henne Mines, a party on foot is stuck in The Shred's south part unless it has greens for the wild chocobo; (3) Golmore Jungle waits for Lente's Tear (story about 1740). Details below.
+
 Test setup: `install 1 exp_freeroam exp_flag=01A4 exp_map=81 exp_entry=0 exp_level=99 exp_weak=dst exp_give=2000:99 openworld`
 (story flag 420, start at South Bank Village, level 99, 99 Teleport Stones, open world on). The bot walked with god
 mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are when it was seen.

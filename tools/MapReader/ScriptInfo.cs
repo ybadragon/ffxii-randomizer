@@ -136,6 +136,11 @@ public sealed class ScriptInfo
                 ls.Add(new Segment(new(F(sg), F(sg + 8)), new(F(sg + 16), F(sg + 24))));
             }
         }
+        // one line whose id no actor claims and one exit actor with no line of its own (The Parting Glade, gol_a04: its
+        // exit to gol_c01 is a lone segment with id 0): they belong together
+        var lonelyLines = lines.Keys.Where(id => !leads.ContainsKey(id)).ToList();
+        var lonelyExits = leads.Keys.Where(id => !lines.ContainsKey(id)).ToList();
+        if (lonelyLines.Count == 1 && lonelyExits.Count == 1) { lines[lonelyExits[0]] = lines[lonelyLines[0]]; lines.Remove(lonelyLines[0]); }
         Exits = lines.Where(kv => leads.ContainsKey(kv.Key)).Select(kv => new Exit(kv.Key, owner[kv.Key], kv.Value, leads[kv.Key], interact.Contains(kv.Key))).ToList();
         OtherTriggers = lines.Where(kv => !leads.ContainsKey(kv.Key)).SelectMany(kv => kv.Value.Select(s => (kv.Key, owner.GetValueOrDefault(kv.Key), s))).ToList();
 

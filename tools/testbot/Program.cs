@@ -607,8 +607,15 @@ switch (args[0])
                     LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, null, goalLabel, $"teleporting to {NameOf(nextMap)}");
                     // the flee key held by this process hides the crystal's prompt for the teleport process: let go first
                     var alwaysTp = Input.Always; Input.Always = []; Input.ReleaseAll(); Thread.Sleep(200);
-                    using (var tp = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"teleport {crystal:X}") { UseShellExecute = false, RedirectStandardOutput = true })!)
-                    { while (tp.StandardOutput.ReadLine() is string line) Console.WriteLine("    " + line); tp.WaitForExit(); }
+                    // a crystal can ignore Space for a while (seen right after teleporting in: the menu stayed shut, and the
+                    // same hop worked 20 s later), so a failed hop is tried once more after a wait
+                    for (int attempt = 0; attempt < 2 && MapNow() == mapId; attempt++)
+                    {
+                        if (attempt > 0) { Console.WriteLine("    the crystal menu didn't open; waiting 15 s and trying again"); Thread.Sleep(15000); }
+                        using var tp = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"teleport {crystal:X}") { UseShellExecute = false, RedirectStandardOutput = true })!;
+                        while (tp.StandardOutput.ReadLine() is string line) Console.WriteLine("    " + line);
+                        tp.WaitForExit();
+                    }
                     Input.Always = alwaysTp;
                     if (MapNow() == mapId) { Console.WriteLine("trip ended: the teleport didn't happen"); return 1; }
                     WaitPlayable();
@@ -1208,3 +1215,4 @@ static class Native
 
 /// <summary>Runs an action when the scope ends, early returns included.</summary>
 sealed class OnExit(Action action) : IDisposable { public void Dispose() => action(); }
+

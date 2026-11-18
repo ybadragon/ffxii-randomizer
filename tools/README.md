@@ -48,7 +48,7 @@ presses keys. Main commands:
   that best matches the live minimap. If the party stops moving for 5 seconds, it marks the spot ahead as a wall for
   this walk only and plans around it, and prints the map data's explanation for that spot (`why:` lines). It never
   saves these walls, because story barriers come and go.
-- `memtool trip <goalMapHex> [x z]`: walks across maps. It takes the fewest-maps route over the game's own exits,
+- `memtool trip <goalMapHex> [x z]`: walks across maps. It takes the quickest route (estimated time: distances from the map data at running speed, plus map changes and teleports) over the game's own exits and teleports,
   walks to each exit's trigger line and crosses it. In the goal map it walks to (x, z).
   Example: `trip 81 182.7 294.8` goes from Rabanastre's Eastgate to South Bank Village's save crystal.
 - `memtool teleport <crystal number>`: walks to this map's crystal, opens its menu and picks the destination by
@@ -58,8 +58,8 @@ presses keys. Main commands:
   new memory values (do something in the game between steps).
 - `memtool viz`: a live window for recording next to the game (picture in picture). It shows the current map's
   picture, the party and its trail, the route the pathfinder is following right now (gold), every exit labelled with
-  where it leads (the next one in gold), walls found on this walk, and the trip's chain of maps with the game's place
-  names. It reads the position from the game itself, so it also follows you when you walk by hand. Start it before or
+  where it leads (the next one in gold), the map's teleport crystal (bright when touched, gold while teleporting), walls
+  found on this walk, and the trip's chain of maps with the game's place names. It reads the position from the game itself, so it also follows you when you walk by hand. Start it before or
   during a `trip`; T toggles always-on-top. `tnav` and `trip` write what they are doing to `work/bot/live/*.json`.
 
 Scripts in `testbot/scripts`:

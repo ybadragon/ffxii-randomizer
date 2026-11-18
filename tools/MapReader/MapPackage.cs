@@ -91,7 +91,27 @@ public sealed class MapPackage
         for (int i = 0; i + 32 <= b.Length; i += 16)
             if (b[i] == 'N' && b[i + 1] == 'P' && b[i + 2] == 'S' && b[i + 3] == '2') { Origin = new(BitConverter.ToSingle(b, i + 16), BitConverter.ToSingle(b, i + 20)); break; }
         Mesh = ReadMesh(b);
-        _minimaps = Tim2.Find(b).Where(p => p.Width >= 512).ToList();
+        // whole-map minimaps are the big pictures with the red floor band; packages also hold other big textures (skies)
+        _minimaps = Tim2.Find(b).Where(p => p.Width >= 512 && IsMinimap(p)).ToList();
+    }
+
+    // A minimap: mostly black or transparent background (over half the picture), with at least 0.3% floor red. Skies and
+    // other big textures are bright all over.
+    static bool IsMinimap(Tim2.Picture p)
+    {
+        using var bmp = p.Decode();
+        var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        var px = new int[bmp.Width * bmp.Height];
+        System.Runtime.InteropServices.Marshal.Copy(data.Scan0, px, 0, px.Length);
+        bmp.UnlockBits(data);
+        int dark = 0, floor = 0;
+        foreach (int c in px)
+        {
+            int a = (c >> 24) & 255, r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+            if (a < 40 || r + g + b < 60) dark++;
+            else if (a > 100 && r > 140 && g < 130 && b < 130) floor++;
+        }
+        return dark > px.Length / 2 && floor > px.Length * 0.003;
     }
 
     static WalkMesh? ReadMesh(byte[] b)

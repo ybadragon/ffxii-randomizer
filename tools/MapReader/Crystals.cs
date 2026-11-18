@@ -2,9 +2,10 @@ using Ff12Randomizer.Core.GameData;
 
 namespace Ff12MapData;
 
-/// <summary>A teleport destination: the crystal's number in the teleport menu's list, its map, and the entrance a teleport
-/// lands on, which is beside that map's crystal.</summary>
-public sealed record Crystal(int Number, int Map, int Entrance, double X, double Z);
+/// <summary>A teleport destination: the crystal's number in the teleport menu's list, its map, the spot a teleport lands on
+/// (X, Z), and the crystal itself (CrystalX, CrystalZ): about 4 units from the landing spot, against the landing direction
+/// (you land facing away from it; checked on two crystals).</summary>
+public sealed record Crystal(int Number, int Map, int Entrance, double X, double Z, double CrystalX, double CrystalZ);
 
 /// <summary>
 /// The teleport crystals, read from the teleport controller actor (telepoeffectctrl) that every crystal map's script has.
@@ -53,7 +54,7 @@ public static class Crystals
             {
                 var (map, ent) = jumps[k];
                 var at = ScriptInfo.For(GameFiles.ScriptName(map) ?? "") is { } info && ent < info.Entrances.Count ? info.Entrances[ent] : default;
-                list.Add(new Crystal(ordered[k].value, map, ent, at.X, at.Z));
+                list.Add(new Crystal(ordered[k].value, map, ent, at.X, at.Z, at.X - Math.Sin(at.Facing) * 4, at.Z - Math.Cos(at.Facing) * 4));
             }
             if (list.Count > 0) return list;
         }

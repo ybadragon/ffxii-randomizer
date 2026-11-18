@@ -12,6 +12,8 @@ sealed class VizForm : Form
 {
     readonly Func<(float x, float y, float z)> _pos;
     readonly Func<int> _map;
+    readonly Func<uint> _touched; // touched teleport crystals, bit n = crystal n
+    Ff12MapData.Crystal? _crystal; // this map's teleport crystal
     readonly System.Windows.Forms.Timer _timer = new() { Interval = 33 };
 
     // current map
@@ -34,9 +36,9 @@ sealed class VizForm : Form
         Gold = Color.FromArgb(255, 196, 64), Ice = Color.FromArgb(150, 225, 255), Hero = Color.FromArgb(255, 120, 60), Bad = Color.FromArgb(255, 80, 80);
     readonly Font _title = new("Segoe UI Semibold", 20f), _small = new("Segoe UI", 10f), _chainFont = new("Segoe UI", 11f), _label = new("Segoe UI Semibold", 9.5f);
 
-    public VizForm(Func<(float x, float y, float z)> pos, Func<int> map)
+    public VizForm(Func<(float x, float y, float z)> pos, Func<int> map, Func<uint> touched)
     {
-        _pos = pos; _map = map;
+        _pos = pos; _map = map; _touched = touched;
         Text = "FFXII trip viewer";
         BackColor = Back; ForeColor = Color.White;
         var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1920, 1040);
@@ -68,6 +70,7 @@ sealed class VizForm : Form
             var last = _trail.Count > 0 ? _trail[^1] : (x: float.NaN, z: float.NaN);
             double d = float.IsNaN(last.x) ? 99 : Math.Sqrt((x - last.x) * (x - last.x) + (z - last.z) * (z - last.z));
             if (d > 0.15 && d < 20) { _heading = Math.Atan2(z - last.z, x - last.x); }
+            if (d > 20) _trail.Clear(); // a jump (teleport, or a stale position right after a map change) starts a new trail
             if (d > 0.15) { _trail.Add((x, z)); if (_trail.Count > 6000) _trail.RemoveAt(0); }
             _at = (x, z);
         }
@@ -89,6 +92,7 @@ sealed class VizForm : Form
         Task.Run(() =>
         {
             var info = Ff12MapData.MapInfo.For(map);
+            var crystal = Ff12MapData.Crystals.On(map);
             var exits = info?.Info.Exits.SelectMany(x => x.Leads.Select(l => (l.Map, x.Line.Select(s => (s.A.X, s.A.Z, s.B.X, s.B.Z)).ToList()))).ToList() ?? new();
             Bitmap? tex = null; Rectangle crop = default; int ox = 0, oy = 0;
             if (info?.Package is { VariantCount: > 0 } pkg)
@@ -113,7 +117,7 @@ sealed class VizForm : Form
                 if (map != _mapId) { tex?.Dispose(); return; }
                 _tex?.Dispose();
                 _tex = tex; _crop = crop; _ox = ox; _oy = oy; _variant = variant; _exits = exits;
-                _place = PlaceOf(map); _script = (info?.Script ?? $"0x{map:X}") + (info?.Package is { VariantCount: > 1 } p ? $" · variant {variant}" : "");
+                _crystal = crystal; _place = PlaceOf(map); _script = (info?.Script ?? $"0x{map:X}") + (info?.Package is { VariantCount: > 1 } p ? $" · variant {variant}" : "");
             });
         });
     }
@@ -181,6 +185,22 @@ sealed class VizForm : Form
             string text = (target ? "Next: " : "") + PlaceOf(ex.dest);
             if (area.Contains(Point.Round(mid))) Label(g, text, mid, target ? Gold : Ice);
             else EdgeArrow(g, area, mid, text, target ? Gold : Ice);
+        }
+
+        // the map's teleport crystal: bright when touched (teleports can go there), dim when not, gold when the trip is
+        // about to teleport from it
+        if (_crystal is { } cr)
+        {
+            bool touchedHere = (_touched() & (1u << cr.Number)) != 0;
+            bool using_ = _trip is { } tc && tc.Status.StartsWith("teleporting") && tc.ChainIds.Length > tc.Current && tc.ChainIds[tc.Current] == _mapId;
+            var col = using_ ? Gold : touchedHere ? Color.FromArgb(120, 210, 255) : Color.FromArgb(120, 140, 160);
+            var cp = P(cr.CrystalX, cr.CrystalZ);
+            float gr = 13;
+            var gem = new[] { new PointF(cp.X, cp.Y - gr * 1.5f), new PointF(cp.X + gr * 0.75f, cp.Y), new PointF(cp.X, cp.Y + gr * 1.5f), new PointF(cp.X - gr * 0.75f, cp.Y) };
+            using (var glow = new SolidBrush(Color.FromArgb(touchedHere || using_ ? 70 : 30, col))) g.FillEllipse(glow, cp.X - gr * 1.8f, cp.Y - gr * 1.8f, gr * 3.6f, gr * 3.6f);
+            using (var fill = new LinearGradientBrush(new PointF(cp.X, cp.Y - gr * 1.5f), new PointF(cp.X, cp.Y + gr * 1.5f), Color.White, col)) g.FillPolygon(fill, gem);
+            using (var edge = new Pen(Color.FromArgb(200, 10, 20, 35), 1.5f)) g.DrawPolygon(edge, gem);
+            Label(g, using_ ? "Teleporting" : touchedHere ? "Crystal" : "Crystal (not touched)", new PointF(cp.X, cp.Y + gr * 1.6f + 22), col);
         }
 
         // trail: where the party has been on this map
@@ -305,12 +325,12 @@ sealed class VizForm : Form
 
     /// <summary>Opens the viewer on a monitor the game isn't on (the game's borderless window covers its own monitor), or
     /// beside the game when there is only one.</summary>
-    public static void Run(Func<(float x, float y, float z)> pos, Func<int> map, IntPtr gameWindow)
+    public static void Run(Func<(float x, float y, float z)> pos, Func<int> map, Func<uint> touched, IntPtr gameWindow)
     {
         var t = new Thread(() =>
         {
             Application.EnableVisualStyles(); Application.SetHighDpiMode(HighDpiMode.SystemAware);
-            var form = new VizForm(pos, map) { StartPosition = FormStartPosition.Manual };
+            var form = new VizForm(pos, map, touched) { StartPosition = FormStartPosition.Manual };
             var game = Screen.FromHandle(gameWindow);
             var screen = Screen.AllScreens.FirstOrDefault(s => !s.Equals(game)) ?? game;
             form.Location = new Point(screen.WorkingArea.X + 40, screen.WorkingArea.Y + 20);

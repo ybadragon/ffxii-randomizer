@@ -304,7 +304,7 @@ switch (args[0])
         {
             // viz: live window with the current map, the party, the pathfinder's route and the trip (see Viz.cs).
             // Runs until closed; start it before or during a trip.
-            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)), p.MainWindowHandle);
+            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)), () => BitConverter.ToUInt32(Read(exe + 0x2A2E5F4, 4)), p.MainWindowHandle);
             break;
         }
     case "teleport":
@@ -322,8 +322,7 @@ switch (args[0])
             if (here is null || info is null) { Console.WriteLine($"teleport: map 0x{mapId:X} has no teleport crystal"); return 1; }
             var dest = Ff12MapData.Crystals.List.FirstOrDefault(c => c.Number == target);
             if (dest is null) { Console.WriteLine($"teleport: no crystal number {target}"); return 1; }
-            double facing = info.Info.Entrances[here.Entrance].Facing;
-            double cx = here.X - Math.Sin(facing) * 4, cz = here.Z - Math.Cos(facing) * 4; // the crystal
+            double cx = here.CrystalX, cz = here.CrystalZ;
             byte U8(long a) => Read(a, 1)[0];
             bool MenuOpen() => U8(exe + 0x203F238) == 1;
             int Cursor() => U8(exe + 0x203F22C);
@@ -373,6 +372,7 @@ switch (args[0])
             }
             ushort MapNow() => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
             string NameOf(int id) => Ff12MapData.GameFiles.PlaceName(id);
+            string NameOf0(int id) => Ff12MapData.GameFiles.ScriptName(id) ?? "";
             string goalLabel = NameOf(goalMap) + (gx is double glx && gz is double glz ? $" ({glx:F0}, {glz:F0})" : "");
             // Waits for a new map to be playable: the position must first land near one of the new map's entrances (right
             // after a jump it still reads the old map's spot), then stay put for half a second. Arrival scenes (a region's
@@ -402,22 +402,47 @@ switch (args[0])
                     LiveState.Trip(visited, visited.Count - 1, -1, (tx, tz), goalLabel, r.StartsWith("arrived") ? "arrived" : "stopped: " + r);
                     return r.StartsWith("arrived") ? 0 : 1;
                 }
-                // fewest-hops route from here over each map's exits (read as the search reaches each map) and, unless
-                // FF12_BOT_TELEPORT=0, teleports: from a map with a teleport crystal to any crystal the party has touched
-                // (bitmask at exe+2A2E5F4, bit n = crystal n; one Teleport Stone each)
+                // quickest route from here, by estimated time: walking a map costs the distance from where you enter to
+                // the exit (x1.3 for winding paths) at running speed, plus the map change; a teleport (unless
+                // FF12_BOT_TELEPORT=0) costs the walk to this map's crystal plus the menu and the teleport, and goes to any
+                // crystal the party has touched (bitmask at exe+2A2E5F4, bit n = crystal n; one Teleport Stone each).
+                // Only the map scripts are read here (entrances, exits, crystal spots), so planning is quick.
+                const double RunSpeed = 6, Winding = 1.3, MapChangeSeconds = 2, TeleportSeconds = 12;
                 bool teleports = Environment.GetEnvironmentVariable("FF12_BOT_TELEPORT") != "0";
                 uint touched = BitConverter.ToUInt32(Read(exe + 0x2A2E5F4, 4));
-                var prev = new Dictionary<int, (int map, Ff12MapData.Exit? exit, int crystal)> { [mapId] = (-1, null, -1) }; var q = new Queue<int>(); q.Enqueue(mapId);
-                while (q.Count > 0 && !prev.ContainsKey(goalMap))
+                double Span((double x, double z) a, (double x, double z) b) => Math.Sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z));
+                (double x, double z) EntranceOf(int map, int ent) =>
+                    Ff12MapData.ScriptInfo.For(NameOf0(map)) is { } si && ent < si.Entrances.Count ? (si.Entrances[ent].X, si.Entrances[ent].Z) : (0, 0);
+                var prev = new Dictionary<int, (int map, Ff12MapData.Exit? exit, int crystal, double cost, (double x, double z) at)> { [mapId] = (-1, null, -1, 0, (px, pz)) };
+                var done = new HashSet<int>();
+                var pq = new PriorityQueue<int, double>(); pq.Enqueue(mapId, 0);
+                void Relax(int to, (int map, Ff12MapData.Exit? exit, int crystal, double cost, (double x, double z) at) via)
                 {
-                    int m = q.Dequeue();
-                    foreach (var x in Ff12MapData.MapInfo.For(m)?.Info.Exits ?? [])
-                        foreach (var (dest, _) in x.Leads) if (prev.TryAdd(dest, (m, x, -1))) q.Enqueue(dest);
-                    if (teleports && Ff12MapData.Crystals.On(m) is not null)
+                    if (to == goalMap && gx is double fx && gz is double fz) via.cost += Span(via.at, (fx, fz)) * Winding / RunSpeed;
+                    if (done.Contains(to) || prev.TryGetValue(to, out var old) && old.cost <= via.cost) return;
+                    prev[to] = via; pq.Enqueue(to, via.cost);
+                }
+                while (pq.TryDequeue(out int m, out _))
+                {
+                    if (!done.Add(m)) continue;
+                    if (m == goalMap) break;
+                    var (_, _, _, cost, at) = prev[m];
+                    if (Ff12MapData.ScriptInfo.For(NameOf0(m)) is not { } si) continue;
+                    foreach (var x in si.Exits)
+                        foreach (var (dest, ent) in x.Leads)
+                            Relax(dest, (m, x, -1, cost + Span(at, (x.Mid.X, x.Mid.Z)) * Winding / RunSpeed + MapChangeSeconds, EntranceOf(dest, ent)));
+                    if (teleports && Ff12MapData.Crystals.On(m) is { } crystalHere)
+                    {
+                        double toCrystal = cost + Span(at, (crystalHere.CrystalX, crystalHere.CrystalZ)) * Winding / RunSpeed + TeleportSeconds;
                         foreach (var c in Ff12MapData.Crystals.List.Where(c => c.Map != m && (touched & (1u << c.Number)) != 0))
-                            if (prev.TryAdd(c.Map, (m, null, c.Number))) q.Enqueue(c.Map);
+                            Relax(c.Map, (m, null, c.Number, toCrystal, (c.X, c.Z)));
+                    }
                 }
                 if (!prev.ContainsKey(goalMap)) { Console.WriteLine($"trip ended: no route from 0x{mapId:X} to 0x{goalMap:X}"); return 1; }
+                {
+                    var plan = new List<string>(); for (int m = goalMap; m != mapId; m = prev[m].map) plan.Insert(0, (prev[m].crystal >= 0 ? "teleport to " : "") + NameOf(m));
+                    Console.WriteLine($"    route: {string.Join(" > ", plan)} (about {prev[goalMap].cost:F0} s)");
+                }
                 int nextMap = goalMap; while (prev[nextMap].map != mapId) nextMap = prev[nextMap].map;
                 var rest = new List<(int id, string name)>();
                 for (int m = goalMap; m != mapId; m = prev[m].map) rest.Insert(0, (m, NameOf(m)));

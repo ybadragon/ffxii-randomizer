@@ -20,9 +20,9 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Where | What blocks | Why (from the scripts) |
 | --- | --- | --- |
 | The Needlebrake, exit to Whisperleaf Way (Golmore Jungle) | The blue seal, until the party has Lente's Tear | `HED_DIREC` opens it only with key item **Lente's Tear** (0x80B7); `rewards.csv` places it in Eruyt Village. Confirmed: with the item given, the seal opens. |
-| Eruyt Village, The Spiritwood: gate to vic_a04 | A shut gate (screenshot kept by the bot) | Not found yet. No Eruyt (`vic_`) rows in `opengates.csv`; the exit actors have no story check. Candidates: the gate-guard actors `配置替え_門守_RECT_A/B`. If Lente's Tear is behind this gate, Golmore Jungle is closed from both sides at story 420. |
+| Eruyt Village, The Spiritwood: gate to vic_a04 | A shut gate (screenshot kept by the bot) | Static scenery: the exit lies off the walk mesh and no actor switches walls, floors or map-jump flags there, so it is only used by scenes. Lente's Tear comes from the Eruyt story event (around story 1740, `常駐監督`), so with `openworld` alone Golmore Jungle waits for that point in the story; the separate OpenWorld rewards (`rewards.csv`) place Lente's Tear in Eruyt after the Henne Mines. |
 | Haulo Green and Field of Light Winds, exits to The Shred | Grass and rock where the exits are; the exits lie off the maps' walk meshes | No story check in either map's script. The Shred itself is reachable through The Greensnake. |
-| The Shred, exit to North Entrance (Henne Mines) | Not reachable from where the party stood | `ヘネ通行制限` (story < 1790) is on the gate list (rows 33-34), so it should be open; the bot couldn't reach it (the map's floor is split). Not confirmed either way. |
+| The Shred, exit to North Entrance (Henne Mines) | Entering from The Greensnake, the live minimap shows the rest of The Shred cut off: no route to its exits to Haulo Green, Field of Light Winds or North Entrance (2026-11-18) | `ヘネ通行制限` (story < 1790) is on the gate list (rows 33-34). What splits the floor isn't found yet; with the Haulo Green and Field of Light Winds passages also blocked, the Henne Mines may be unreachable at story 420. Next: walk The Shred's north part by hand and look. |
 
 ## Not tested: the bot can't route there yet
 

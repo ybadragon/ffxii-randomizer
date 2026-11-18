@@ -401,6 +401,10 @@ switch (args[0])
             using (var pr = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, string.Format(ci, "tnav {0} {1} 60", cx, cz)) { UseShellExecute = false, RedirectStandardOutput = true })!)
             { Console.WriteLine("  " + pr.StandardOutput.ReadToEnd().Trim().Split('\n').Last()); pr.WaitForExit(); }
             Input.Focus(p.MainWindowHandle);
+            // the walk held the flee key (Ctrl), which hides the crystal's Space prompt: tap it so it is up for sure, and
+            // don't hold it again while stepping closer
+            Input.Always = [];
+            Input.Hold([(char)0x11], 30); Thread.Sleep(600);
             for (int tries = 0; tries < 6 && !MenuOpen(); tries++)
             {
                 Key(' '); Thread.Sleep(600);
@@ -1130,7 +1134,7 @@ static class Input
     /// between steering updates.</summary>
     /// <summary>Keys held down with any movement: the flee key (R2 = Left Ctrl by default; seen in game: "FLEEING" while
     /// held), so walks don't stop to fight. FF12_BOT_FLEE=0 turns it off; another hex virtual-key code replaces it.</summary>
-    public static readonly char[] Always = Environment.GetEnvironmentVariable("FF12_BOT_FLEE") switch
+    public static char[] Always = Environment.GetEnvironmentVariable("FF12_BOT_FLEE") switch
     {
         "0" => [],
         { Length: > 0 } f => [(char)Convert.ToInt32(f, 16)],

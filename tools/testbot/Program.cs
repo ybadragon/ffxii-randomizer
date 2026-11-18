@@ -482,6 +482,31 @@ switch (args[0])
                 double Span((double x, double z) a, (double x, double z) b) => Math.Sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z));
                 (double x, double z) EntranceOf(int map, int ent) =>
                     Ff12MapData.ScriptInfo.For(NameOf0(map)) is { } si && ent < si.Entrances.Count ? (si.Entrances[ent].X, si.Entrances[ent].Z) : (0, 0);
+                // Exits of this map the party can't reach from where it stands (quicksand, floor a switch cut off): checked
+                // on the minimap variant that matches the live minimap, the picture tnav walks by. Only with a confident
+                // match, and never all of them.
+                if (Ff12MapData.MapInfo.For(mapId) is { Package: { VariantCount: > 0 } pk0 } mi0)
+                {
+                    int ox0 = (int)Math.Round(-pk0.Origin.X * 4), oy0 = (int)Math.Round(-pk0.Origin.Z * 4);
+                    var cms = Enumerable.Range(0, pk0.VariantCount).Select(v => new TexMap(pk0.Minimap(v), ox0, oy0)).ToList();
+                    var scored = cms.Select(cm => (cm, score: Align(cm, 12).score)).OrderByDescending(s => s.score).First();
+                    if (scored.score >= 0.25)
+                    {
+                        var cm = scored.cm; var from = cm.ToPx(px, pz);
+                        var cut = new List<Ff12MapData.Exit>();
+                        foreach (var x in mi0.Info.Exits)
+                        {
+                            var ins = mi0.Info.Entrances.Where(e => e.X != 0 || e.Z != 0).OrderBy(e => Math.Pow(e.X - x.Mid.X, 2) + Math.Pow(e.Z - x.Mid.Z, 2)).Select(e => (e.X, e.Z)).DefaultIfEmpty((px, pz)).First();
+                            double ddx = x.Mid.X - ins.Item1, ddz = x.Mid.Z - ins.Item2, dl = Math.Max(0.01, Math.Sqrt(ddx * ddx + ddz * ddz));
+                            var to = cm.ToPx(x.Mid.X - ddx / dl * 2.5, x.Mid.Z - ddz / dl * 2.5);
+                            if (cm.Path(((int)from.u, (int)from.v), ((int)to.u, (int)to.v)).Count == 0) cut.Add(x);
+                        }
+                        if (cut.Count < mi0.Info.Exits.Count)
+                            foreach (var x in cut)
+                                if (unusable.Add((mapId, x.TriggerId)))
+                                    Console.WriteLine($"    can't reach the exit at ({x.Mid.X:F1}, {x.Mid.Z:F1}) from here on the live minimap; planning without it");
+                    }
+                }
                 var prev = new Dictionary<int, (int map, Ff12MapData.Exit? exit, int crystal, double cost, (double x, double z) at)> { [mapId] = (-1, null, -1, 0, (px, pz)) };
                 var done = new HashSet<int>();
                 var pq = new PriorityQueue<int, double>(); pq.Enqueue(mapId, 0);

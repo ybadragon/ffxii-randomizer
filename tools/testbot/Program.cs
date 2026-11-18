@@ -419,7 +419,7 @@ switch (args[0])
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             int goalMap = Convert.ToInt32(args[1], 16);
             double? gx = args.Length > 3 ? double.Parse(args[2], ci) : null, gz = args.Length > 3 ? double.Parse(args[3], ci) : null;
-            int maxMaps = args.Length > 4 ? int.Parse(args[4]) : 12;
+            int maxMaps = args.Length > 4 ? int.Parse(args[4]) : 40;
             if (Environment.GetEnvironmentVariable("FF12_BOT_GOD") != "0") StartGod(s => Console.WriteLine("    " + s));
             string Walk(double x, double z)
             {

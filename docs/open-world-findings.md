@@ -18,7 +18,7 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 
 | Where | What blocks | Why (from the scripts) |
 | --- | --- | --- |
-| The Needlebrake, exit to Whisperleaf Way (Golmore Jungle) | The blue seal | `HED_DIREC` opens it only with key item **Lente's Tear** (0x80B7); `rewards.csv` places Lente's Tear in Eruyt Village. Not on the gate list, and it shouldn't be: the item is the key. |
+| The Needlebrake, exit to Whisperleaf Way (Golmore Jungle) | The blue seal, until the party has Lente's Tear | `HED_DIREC` opens it only with key item **Lente's Tear** (0x80B7); `rewards.csv` places it in Eruyt Village. Confirmed: with the item given, the seal opens. |
 | Eruyt Village, The Spiritwood: gate to vic_a04 | A shut gate (screenshot kept by the bot) | Not found yet. No Eruyt (`vic_`) rows in `opengates.csv`; the exit actors have no story check. Candidates: the gate-guard actors `配置替え_門守_RECT_A/B`. If Lente's Tear is behind this gate, Golmore Jungle is closed from both sides at story 420. |
 | Haulo Green and Field of Light Winds, exits to The Shred | Grass and rock where the exits are; the exits lie off the maps' walk meshes | No story check in either map's script. The Shred itself is reachable through The Greensnake. |
 | The Shred, exit to North Entrance (Henne Mines) | Not reachable from where the party stood | `ヘネ通行制限` (story < 1790) is on the gate list (rows 33-34), so it should be open; the bot couldn't reach it (the map's floor is split). Not confirmed either way. |
@@ -36,3 +36,9 @@ Passage's inner links, Ridorana, Archades, the Feywood. The exit reader finds 11
   edits. How script flag ids (`setmapjumpgroupflag` 0x430 and up to 16426) map to these groups isn't decoded.
 - Interaction spots (doors, switches, the hidden path) are in the script header's 0x74 table; the flee key hides their
   Space prompts.
+
+## Key items for testing
+
+`memtool keyitem <hex id> [off]` gives or takes a key item. Key items are bits: bit (id - 0x8000) from savemem
+`exe+204B3C0`, with five more copies the game keeps in step (all are written). With Lente's Tear (80B7) given, The
+Needlebrake's Golmore seal opened on the next map change and the party reached Whisperleaf Way (2026-11-18).

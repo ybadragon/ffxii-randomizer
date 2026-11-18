@@ -314,6 +314,28 @@ switch (args[0])
                 });
             break;
         }
+    case "keyitem":
+        {
+            // keyitem <hex id> [off]: gives (or takes) a key item (0x8000 and up). Key items are bits, bit (id - 0x8000),
+            // from savemem exe+204B3C0; the game keeps five more copies, which a write to one doesn't survive, so every
+            // copy is written: each place in the game's own data holding the same first 32 bytes. Checked in game with
+            // Lente's Tear (80B7): The Needlebrake's Golmore seal opens after a map change.
+            int id = Convert.ToInt32(args[1], 16) - 0x8000; bool off = args.Length > 2 && args[2] == "off";
+            const long KeyBits = 0x204B3C0;
+            var reference = Read(exe + KeyBits, 32);
+            int size = p.MainModule!.ModuleMemorySize; var img = Read(exe, size);
+            var copies = new List<long>();
+            for (int o = 0; o + 32 <= img.Length; o += 4)
+                if (img.AsSpan(o, 32).SequenceEqual(reference)) copies.Add(o);
+            foreach (long o in copies)
+            {
+                byte b = Read(exe + o + id / 8, 1)[0];
+                b = off ? (byte)(b & ~(1 << (id % 8))) : (byte)(b | 1 << (id % 8));
+                Native.WriteProcessMemory(h, (IntPtr)(exe + o + id / 8), [b], (IntPtr)1, out _);
+            }
+            Console.WriteLine($"key item 0x{id + 0x8000:X} {(off ? "taken" : "given")} in {copies.Count} copies ({string.Join(", ", copies.Select(c => $"exe+{c:X}"))}); takes effect at the next map change");
+            break;
+        }
     case "god":
         {
             // god: keeps every living character at full HP until stopped; prints a DEATH line when one falls anyway

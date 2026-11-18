@@ -106,7 +106,8 @@ How it works, and what it has taught us:
   turning the camera with the arrow keys, since movement follows the camera. The camera is only turned when the heading
   is more than 10 degrees off (and until it is within 3), half the error per tap, at most one tap per 150 ms; the turn
   rate is measured once per trip and refined after every tap (it changes with speed mode). The bot releases held keys
-  on any exit; if a crash still leaves one down, tap that key once.
+  on any exit; if a crash still leaves one down, tap that key once (`scripts/game.ps1 -Keep -Steps key:w,...`:
+  without `-Keep` that script closes the game when it's done, which looks like a crash).
 - **Stuck detection**: under 1 unit of movement in 5 seconds marks a wall just ahead and plans around it. The bot
   gives up after 4 tries. Each time it prints `why:` lines from the map data: off the walk mesh, a barrier crossing,
   floor that only exists in another minimap variant (and what switches it), a trigger line, or nothing (then look at a

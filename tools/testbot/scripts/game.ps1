@@ -1,5 +1,7 @@
 param([string]$Steps = "wait:45,shot:t0", [string]$Dir = "$PSScriptRoot\..\..\..\work\bot\game", [switch]$Keep)
 # Drives the game: steps are wait:<s>, key:<name>, shot:<name>. Launches it first unless it is already running.
+# Without -Keep it CLOSES THE GAME when the steps are done (even if it was already running): pass -Keep to send a
+# key to a running test, e.g. to release held keys after stopping the bot.
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms
 Add-Type @"
 using System; using System.Runtime.InteropServices;

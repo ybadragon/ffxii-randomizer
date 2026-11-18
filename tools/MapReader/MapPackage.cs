@@ -19,6 +19,44 @@ public sealed class WalkMesh(Point2[] vertices, (int A, int B, int C, int Cell)[
 
     public Segment Line(MeshEdge e) => new(Vertices[e.A], Vertices[e.B]);
 
+    /// <summary>Which separate piece of floor a triangle is on: triangles sharing an edge are one piece unless that
+    /// edge is a wall (kind 0x08; a cliff can run between two triangles that touch). The Shred (ozm_c01) is two pieces
+    /// this way, so its Greensnake side has no walk to its Henne Mines exit.</summary>
+    public int PieceOf(int triangle) => (_pieces ??= Pieces())[triangle];
+    int[]? _pieces;
+    int[] Pieces()
+    {
+        var parent = Enumerable.Range(0, Triangles.Length).ToArray();
+        int Find(int t) { while (parent[t] != t) t = parent[t] = parent[parent[t]]; return t; }
+        var walls = Edges.Where(e => e.Kind == 0x08).Select(e => (Math.Min(e.A, e.B), Math.Max(e.A, e.B))).ToHashSet();
+        var byEdge = new Dictionary<(int, int), int>();
+        for (int t = 0; t < Triangles.Length; t++)
+        {
+            var (a, b, c, _) = Triangles[t];
+            if (a >= Vertices.Length || b >= Vertices.Length || c >= Vertices.Length) continue;
+            foreach (var (u, v) in new[] { (a, b), (b, c), (c, a) })
+                if (walls.Contains((Math.Min(u, v), Math.Max(u, v)))) continue;
+                else if (byEdge.TryGetValue((Math.Min(u, v), Math.Max(u, v)), out int o)) parent[Find(o)] = Find(t);
+                else byEdge[(Math.Min(u, v), Math.Max(u, v))] = t;
+        }
+        return Enumerable.Range(0, Triangles.Length).Select(Find).ToArray();
+    }
+
+    /// <summary>The triangle holding the point, else the closest one within <paramref name="near"/> units, or -1.</summary>
+    public int NearestTriangle(Point2 p, double near)
+    {
+        int t = TriangleAt(p); if (t >= 0) return t;
+        double best = near;
+        for (int i = 0; i < Triangles.Length; i++)
+        {
+            var (a, b, c, _) = Triangles[i];
+            if (a >= Vertices.Length || b >= Vertices.Length || c >= Vertices.Length) continue;
+            double d = Math.Min(new Segment(Vertices[a], Vertices[b]).DistanceTo(p), Math.Min(new Segment(Vertices[b], Vertices[c]).DistanceTo(p), new Segment(Vertices[c], Vertices[a]).DistanceTo(p)));
+            if (d < best) { best = d; t = i; }
+        }
+        return t;
+    }
+
     /// <summary>The triangle holding the point (with a little tolerance at the edges), or -1.</summary>
     public int TriangleAt(Point2 p, double tolerance = 0.25)
     {

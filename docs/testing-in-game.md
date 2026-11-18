@@ -112,7 +112,11 @@ How it works, and what it has taught us:
   floor that only exists in another minimap variant (and what switches it), a trigger line, or nothing (then look at a
   screenshot: probably a battle, a dialog or an NPC). These walls last for **one walk only**. Story barriers open later in the game, so never
   save them.
-- **Monsters attack while walking.** Use `exp_level=99` and `exp_weak=<text>`. There is no working god mode: the HP
-  values in memory are display copies.
-- **Plateaus**: the minimap picture is flat, so a route can go up a slope onto a plateau. The walk mesh in each
-  package marks which floor areas connect, and using it for planning is the next improvement.
+- **Monsters attack while walking.** Use `exp_level=99` and `exp_weak=<text>`; `trip` also runs god mode (above), and
+  holds the flee key.
+- **Separate pieces of floor**: the walk mesh's wall edges (kind 0x08) split a map into pieces, even where two
+  triangles touch (a cliff between them). The trip planner tracks which entrance it arrives at on each map and adds 15
+  minutes to any exit on another piece than that entrance (`mapdata reach <map>|all` lists them). It isn't a hard block,
+  because sluice gates and lifts change the floor in ways the mesh doesn't show. Maps whose script switches the minimap
+  variant (Hourglass Basin's quicksand) are left to the live-minimap check. Within one piece, the minimap picture is
+  still flat, so a route can still try to climb onto a plateau.

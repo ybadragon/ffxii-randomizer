@@ -79,6 +79,24 @@ public sealed class MapInfo
         return best;
     }
 
+    /// <summary>
+    /// Whether the walk mesh lets the party walk from <paramref name="from"/> to an exit (to a point 2.5 units inside its
+    /// line, toward the map's entrance nearest it). False when the exit's inside is on another piece of floor, or far
+    /// off the floor while <paramref name="from"/> is on it (The Shred's exits to Haulo Green and Field of Light Winds:
+    /// grass and rock in game). True when the map has no mesh or <paramref name="from"/> isn't near it (no evidence), and
+    /// on maps whose script switches the minimap variant (the floor changes there, as Hourglass Basin's quicksand does,
+    /// and the mesh alone doesn't say how).
+    /// </summary>
+    public bool CanWalkTo(Point2 from, Exit x)
+    {
+        if (Package?.Mesh is not { } m || Info.VariantSwitches.Count > 0) return true;
+        int a = m.NearestTriangle(from, 4); if (a < 0) return true;
+        var ins = Info.Entrances.Where(e => e.X != 0 || e.Z != 0).OrderBy(e => Math.Pow(e.X - x.Mid.X, 2) + Math.Pow(e.Z - x.Mid.Z, 2)).Select(e => new Point2(e.X, e.Z)).DefaultIfEmpty(from).First();
+        double dx = x.Mid.X - ins.X, dz = x.Mid.Z - ins.Z, l = Math.Max(0.01, Math.Sqrt(dx * dx + dz * dz));
+        int b = m.NearestTriangle(new(x.Mid.X - dx / l * 2.5, x.Mid.Z - dz / l * 2.5), 4);
+        return b >= 0 && m.PieceOf(a) == m.PieceOf(b);
+    }
+
     /// <summary>Conditional crossings of the walk mesh that aren't at one of the map's exits (more than 8 units away).</summary>
     public IReadOnlyList<Barrier> Barriers => _barriers ??= Package?.Mesh is not { } m ? [] :
         m.Edges.Where(e => e.IsConditional && e.IsCrossing && e.A < m.Vertices.Length && e.B < m.Vertices.Length)

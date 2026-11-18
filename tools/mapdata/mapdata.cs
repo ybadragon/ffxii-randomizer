@@ -11,6 +11,8 @@ using Ff12MapData;
 //   dotnet run mapdata.cs -- draw <map> <out.png> [variant]   picture: minimap, walk mesh, exits, barriers, variant changes
 //   dotnet run mapdata.cs -- actor <map> <actor>         one actor's script code (call names from work/ff12-script)
 //   dotnet run mapdata.cs -- crystals                     every teleport destination (number, map, landing spot)
+//   dotnet run mapdata.cs -- reach <map>... | all         exits the walk mesh says can't be walked to, per entrance
+//   dotnet run mapdata.cs -- packages <map>              the area's map packages: entrances on their floor, floor pieces
 if (args.Length == 0) { Console.WriteLine("map <map> | route <from> <to> | explain <map> <x> <z> | scan | draw <map> <png> [variant] | actor <map> <actor>"); return 1; }
 int Id(string s) => GameFiles.MapId(s) ?? Convert.ToInt32(s, 16);
 string Label(int id) => $"{GameFiles.PlaceName(id)} ({GameFiles.ScriptName(id)}, 0x{id:X})";
@@ -47,6 +49,32 @@ switch (args[0])
             var path = new List<int>(); for (int c = to; c != from; c = prev[c].map) path.Add(c); path.Reverse();
             Console.WriteLine($"{Label(from)} -> {Label(to)}: {path.Count} map changes");
             foreach (var c in path) Console.WriteLine($"  on {GameFiles.PlaceName(prev[c].map)}: exit at ({prev[c].exit.Mid.X:F1}, {prev[c].exit.Mid.Z:F1}) -> {GameFiles.PlaceName(c)} entrance {prev[c].entrance}");
+            return 0;
+        }
+    case "packages":
+        {
+            // every map package of the map's area: how many of the map's entrances lie on its walk mesh, and its pieces
+            var m = MapInfo.For(Id(args[1])) ?? throw new Exception("no script for that map");
+            var ents = m.Info.Entrances.Where(e => e.X != 0 || e.Z != 0).Select(e => new Point2(e.X, e.Z)).ToList();
+            foreach (var name in MapPackage.InArea(m.Script[..3]))
+                if (MapPackage.Get(name) is { Mesh: { } mesh } && ents.Count(p => mesh.TriangleAt(p) >= 0) is int hits and > 0)
+                    Console.WriteLine($"  {name}: {hits}/{ents.Count} entrances on its floor, {Enumerable.Range(0, mesh.Triangles.Length).Select(mesh.PieceOf).Distinct().Count()} piece(s), entrance pieces {string.Join(" ", ents.Select(p => mesh.TriangleAt(p) is int t and >= 0 ? mesh.PieceOf(t).ToString() : "-"))}");
+            return 0;
+        }
+    case "reach":
+        {
+            // reach <map>...: for each entrance, the exits the walk mesh says can't be walked to from it
+            foreach (var a in args[1] == "all" ? GameFiles.AllMapIds.Select(i => i.ToString("X")) : args.Skip(1))
+            {
+                if (MapInfo.For(Id(a)) is not { } m) continue;
+                if (m.Package?.Mesh is null || m.Info.Exits.Count == 0) continue; Console.WriteLine(Label(m.Id));
+                for (int e = 0; e < m.Info.Entrances.Count; e++)
+                {
+                    var (ex, _, ez, _) = m.Info.Entrances[e]; if (ex == 0 && ez == 0) continue;
+                    var cut = m.Info.Exits.Where(x => !m.CanWalkTo(new(ex, ez), x)).ToList();
+                    if (cut.Count > 0) Console.WriteLine($"  from entrance {e}: can't reach {string.Join(", ", cut.Select(x => $"{string.Join("/", x.Leads.Select(l => GameFiles.PlaceName(l.Map)).Distinct())} ({x.Mid.X:F0}, {x.Mid.Z:F0})"))}");
+                }
+            }
             return 0;
         }
     case "explain":

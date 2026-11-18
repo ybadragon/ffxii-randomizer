@@ -541,40 +541,53 @@ switch (args[0])
                                     Console.WriteLine($"    can't reach the exit at ({x.Mid.X:F1}, {x.Mid.Z:F1}) from here on the live minimap; planning without it");
                     }
                 }
-                var prev = new Dictionary<int, (int map, Ff12MapData.Exit? exit, int crystal, double cost, (double x, double z) at)> { [mapId] = (-1, null, -1, 0, (px, pz)) };
-                var done = new HashSet<int>();
-                var pq = new PriorityQueue<int, double>(); pq.Enqueue(mapId, 0);
-                void Relax(int to, (int map, Ff12MapData.Exit? exit, int crystal, double cost, (double x, double z) at) via)
+                // nodes are (map, entrance arrived at): the walk mesh says which exits can be walked to from there (The
+                // Shred: from The Greensnake, none but the way back). An exit it says can't be reached costs CutOff more
+                // rather than being left out: sluice gates and lifts change the floor in ways the mesh doesn't show, so
+                // it is used when nothing else goes there, and walking then decides. The start is (this map, -1).
+                const double CutOff = 900;
+                var start = (map: mapId, ent: -1);
+                var prev = new Dictionary<(int map, int ent), ((int map, int ent) from, Ff12MapData.Exit? exit, int crystal, double cost, (double x, double z) at)> { [start] = ((-1, -1), null, -1, 0, (px, pz)) };
+                var done = new HashSet<(int map, int ent)>();
+                var pq = new PriorityQueue<(int map, int ent), double>(); pq.Enqueue(start, 0);
+                (int map, int ent)? goalNode = null;
+                void Relax((int map, int ent) to, ((int map, int ent) from, Ff12MapData.Exit? exit, int crystal, double cost, (double x, double z) at) via)
                 {
-                    if (to == goalMap && gx is double fx && gz is double fz) via.cost += Span(via.at, (fx, fz)) * Winding / RunSpeed;
+                    if (to.map == goalMap && gx is double fx && gz is double fz) via.cost += Span(via.at, (fx, fz)) * Winding / RunSpeed;
                     if (done.Contains(to) || prev.TryGetValue(to, out var old) && old.cost <= via.cost) return;
                     prev[to] = via; pq.Enqueue(to, via.cost);
                 }
-                while (pq.TryDequeue(out int m, out _))
+                while (pq.TryDequeue(out var node, out _))
                 {
-                    if (!done.Add(m)) continue;
-                    if (m == goalMap) break;
-                    var (_, _, _, cost, at) = prev[m];
+                    if (!done.Add(node)) continue;
+                    int m = node.map;
+                    if (m == goalMap) { goalNode = node; break; }
+                    var (_, _, _, cost, at) = prev[node];
                     if (Ff12MapData.ScriptInfo.For(NameOf0(m)) is not { } si) continue;
+                    var mi = Ff12MapData.MapInfo.For(m);
                     foreach (var x in si.Exits.Where(x => !unusable.Contains((m, x.TriggerId))))
+                    {
+                        double walk = cost + Span(at, (x.Mid.X, x.Mid.Z)) * Winding / RunSpeed + MapChangeSeconds + (mi is null || mi.CanWalkTo(new(at.x, at.z), x) ? 0 : CutOff);
                         foreach (var (dest, ent) in x.Leads)
-                            Relax(dest, (m, x, -1, cost + Span(at, (x.Mid.X, x.Mid.Z)) * Winding / RunSpeed + MapChangeSeconds, EntranceOf(dest, ent)));
+                            Relax((dest, ent), (node, x, -1, walk, EntranceOf(dest, ent)));
+                    }
                     if (teleports && Ff12MapData.Crystals.On(m) is { } crystalHere)
                     {
                         double toCrystal = cost + Span(at, (crystalHere.CrystalX, crystalHere.CrystalZ)) * Winding / RunSpeed + TeleportSeconds;
                         foreach (var c in Ff12MapData.Crystals.List.Where(c => c.Map != m && touchedSet.Contains(c.KeyItem)))
-                            Relax(c.Map, (m, null, c.KeyItem, toCrystal, (c.X, c.Z)));
+                            Relax((c.Map, c.Entrance), (node, null, c.KeyItem, toCrystal, (c.X, c.Z)));
                     }
                 }
-                if (!prev.ContainsKey(goalMap)) { Console.WriteLine($"trip ended: no route from 0x{mapId:X} to 0x{goalMap:X}"); return 1; }
+                if (goalNode is not { } goal) { Console.WriteLine($"trip ended: no route from 0x{mapId:X} to 0x{goalMap:X}"); return 1; }
                 {
-                    var plan = new List<string>(); for (int m = goalMap; m != mapId; m = prev[m].map) plan.Insert(0, (prev[m].crystal >= 0 ? "teleport to " : "") + NameOf(m));
-                    Console.WriteLine($"    route: {string.Join(" > ", plan)} (about {prev[goalMap].cost:F0} s)");
+                    var plan = new List<string>(); for (var n = goal; n != start; n = prev[n].from) plan.Insert(0, (prev[n].crystal >= 0 ? "teleport to " : "") + NameOf(n.map));
+                    Console.WriteLine($"    route: {string.Join(" > ", plan)} (about {prev[goal].cost:F0} s)");
                 }
-                int nextMap = goalMap; while (prev[nextMap].map != mapId) nextMap = prev[nextMap].map;
+                var nextNode = goal; while (prev[nextNode].from != start) nextNode = prev[nextNode].from;
+                int nextMap = nextNode.map;
                 var rest = new List<(int id, string name)>();
-                for (int m = goalMap; m != mapId; m = prev[m].map) rest.Insert(0, (m, NameOf(m)));
-                if (prev[nextMap].crystal is int crystal and >= 0)
+                for (var n = goal; n != start; n = prev[n].from) rest.Insert(0, (n.map, NameOf(n.map)));
+                if (prev[nextNode].crystal is int crystal and >= 0)
                 {
                     // teleport hop: the teleport command walks to this map's crystal and drives its menu from memory
                     Console.WriteLine($"    teleporting to crystal 0x{crystal:X} ({NameOf(nextMap)})");
@@ -585,7 +598,7 @@ switch (args[0])
                     WaitPlayable();
                     continue;
                 }
-                var ex = prev[nextMap].exit!;
+                var ex = prev[nextNode].exit!;
                 // outwards: from this map's entrance nearest the line (its inside) through the line's middle
                 var here = Ff12MapData.MapInfo.For(mapId)!;
                 var inside = here.Info.Entrances.Where(e => e.X != 0 || e.Z != 0).OrderBy(e => Math.Pow(e.X - ex.Mid.X, 2) + Math.Pow(e.Z - ex.Mid.Z, 2))

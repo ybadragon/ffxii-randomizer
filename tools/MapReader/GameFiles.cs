@@ -28,8 +28,12 @@ public static class GameFiles
         if (File.Exists(file)) return File.ReadAllBytes(file);
         if (Archive.Value.Find(path) is not { } entry) return null;
         var data = Archive.Value.Extract(entry);
+        // write a private temp file and move it into place, so another bot process reading the same file (the map window
+        // while a trip runs) never sees half of it, and two writers don't collide
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllBytes(file, data);
+        var temp = $"{file}.{Environment.ProcessId}.tmp";
+        File.WriteAllBytes(temp, data);
+        try { File.Move(temp, file, overwrite: true); } catch (IOException) { File.Delete(temp); }
         return data;
     }
 

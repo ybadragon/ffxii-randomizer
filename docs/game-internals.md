@@ -17,7 +17,9 @@ features", "VBF format notes").
 | `exe+1E5E528` | f32 | Camera: c = f32 at +0, s = f32 at +0x20. W moves the party along world (s, c), D along (-c, s). |
 | `exe+203F22C` | u8 | Cursor of the open dialog menu (0 = first option); also mirrored at `exe+1F7C684`. Confirmed on the crystal menu and its destination list. |
 | `exe+203F238` | u8 | 1 while a dialog menu is open (used by `memtool teleport`; `exe+203F1A2`, `203F1AC`, `203F1B0` behave the same). Same on two crystals. |
-| `exe+204586A` | u8 | Touched-crystal bits (South Bank Village set 0x40, West Barbican 0x10; the layout isn't worked out). |
+| `exe+2092938` | u32 | Character records, 0x1C8 apart (Vaan, Ashe, Fran, Balthier, Basch, ...): max HP here, **current HP at +0x24**. Writing the current HP changes it in game (checked); `exe+1F7B088` (+0xC4 per battle slot) and `exe+21A80A0` (+0xC0) are copies refreshed from it. |
+| `exe+2044480` | | Start of savemem (script `savemem` variables are offsets from here; the story flag is savemem 0). |
+| `exe+2045072` | 31 x u16 | Teleport destination lines, `g_menu_telepo_dest` (savemem 0x0BF2): the key item of each touched crystal, in touch order (see Teleporting). |
 | `exe+203F228` | u8 | Index of the open menu's last line (lines = value + 1). |
 | `exe+203F1B3`, `exe+203F228` | u8 | Candidates for the option count (3) and last option index (2); not yet told apart. |
 | `exe+1F7B088`, `exe+21A80A0` | | HP copies, 0xC0 bytes per member (current, then max). These are display copies: writing to them changes nothing. |
@@ -94,15 +96,23 @@ cliff.
 
 Crystal menu (checked 2026-11-17): walk up until "Space <name> Crystal" shows (about 4 units from the crystal's landing
 spot, straight ahead in the landing direction), Space: Save / Teleport / Done (cursor on Save); S, Space: "Select a
-destination", one line per region with a touched crystal in crystal-number order, then Cancel; pick, Space. One
+destination", one line per touched crystal (see below), then Cancel; pick, Space. One
 Teleport Stone per teleport (`exp_give=2000:99` gives 99). The crystal stands about 4 units from its
 landing spot in direction (-sin f, -cos f), f = the landing entrance's facing (you land facing away from it).
-`memtool teleport <n>` does all of this from memory, no screenshots; `trip` uses it for teleport hops.
-The destination list is in **touch order** (one line per region with a touched crystal; seen: Rabanastre, Dalmasca
-Estersand, Nalbina Fortress after touching South Bank Village then West Barbican), not crystal or region order. Where the
-game keeps that order isn't found yet: the bot keeps its own touch log (work/bot/live/crystal-touch-order.txt) and
-places lines it can't account for first. Regions with two touched crystals (a second-level list?) aren't seen yet. Cancel closes the whole menu. The destination list comes from
-the crystal scripts (`mapdata.cs crystals`).
+`memtool teleport <map or key item>` does all of this from memory, no screenshots; `trip` uses it for teleport hops.
+
+How the game does it (every crystal map's `system_crystal_actor` and `telepoeffectctrl`, decompiled with ff12-script
+`-dc` on the script section of the .ebp, from the u32 at 0x10 to the u32 at 0x18):
+- Each crystal has a hidden **key item**, 0x8040 and up (Southgate 0x8040, West Barbican 0x8042, South Bank Village
+  0x8057, ...). Touching a crystal gives its item and appends it to `g_menu_telepo_dest[31]` (savemem 0x0BF2,
+  `exe+2045072`) unless it's there already. Southgate's is added on every crystal's init, so a new game starts with it.
+- The destination menu asks with 25 lines: line i shows the **name of item `g_menu_telepo_dest[i]`** (the region name,
+  e.g. "Dalmasca Estersand" for South Bank Village), empty slots are hidden, then Cancel (result 25 or more). Slots fill
+  in order, so the visible line number is the slot number.
+- The chosen item goes to `telepoeffectctrl::telepoeffect`, which takes a Teleport Stone and switches on the item:
+  `case 0x8057: mapjump(0x81, 0, 10)`. `mapdata.cs crystals` reads that switch (case values are PUSHI, an index into the
+  script's integer table) and gives each crystal its key item, map and landing entrance.
+- Choosing the crystal you stand at says you're already there.
 
 ## Crashes and hangs
 

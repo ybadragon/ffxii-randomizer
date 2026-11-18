@@ -110,7 +110,7 @@ switch (args[0])
     case "crystals":
         {
             // crystals: every teleport destination: its number in the teleport list, map, and where you land (by the crystal)
-            foreach (var c in Crystals.List) Console.WriteLine($"  {c.Number,2}: {Label(c.Map)} entrance {c.Entrance} at ({c.X:F1}, {c.Z:F1})");
+            foreach (var c in Crystals.List) Console.WriteLine($"  0x{c.KeyItem:X4}: {Label(c.Map)} entrance {c.Entrance} at ({c.X:F1}, {c.Z:F1})");
             Console.WriteLine($"{Crystals.List.Count} teleport destinations");
             return 0;
         }

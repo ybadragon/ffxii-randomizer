@@ -54,6 +54,23 @@ Controls:
 | Space | Talks or interacts, only when the "Space &lt;name&gt;" prompt shows; also confirms dialogs |
 | Enter, Space or F with no prompt | Opens the battle menu (C closes it) |
 | M | Full map (explored parts only; 2 zooms) |
+| Escape | Pause (C = back, F = exit to title, R = quit game) |
+| Left Ctrl (held) | Flee (R2): "FLEEING" shows and the party stops fighting. The bot holds it while walking |
+| Left Shift | Walk mode |
+| K | D-pad down (moves the "Select Leader" cursor, where S doesn't) |
+| Enter | Advances some battle messages ("All members of the party have fallen") where Space opens the pause screen |
+
+The bindings are in `Documents\My Games\FINAL FANTASY XII THE ZODIAC AGE\<steam id>\keymap.ini`, in the game's own key
+numbers. The exe holds the key names in reverse enum order (`Key_Apostrophe` ... `Key_Comma`); read backwards they give
+A = 28 ... Z = 53, 1 ... 0 = 54 ... 63, Escape 64, F1 ... F12 65 ... 76, Enter 77, Backspace 78, Tab 79, Space 80,
+`- = [ ] \ ; '` 81 ... 87, Comma 88, Period 89, Slash 90, Left Right Up Down 91 ... 94, Home End PgUp PgDn Insert Delete
+95 ... 100, Numpad 1 ... 9, 0 101 ... 110, Numpad `/ * - + Enter .` 111 ... 116, Left Ctrl 117, Left Shift 118, Left Alt
+119, Right Ctrl 120, Right Shift 121, Right Alt 122, Grave 123. Every binding in the file fits this (W = 50, the arrows
+turn the camera, Escape = Start, R2 = 117 = Left Ctrl).
+
+God mode (the bot's `memtool god`, and `trip` unless `FF12_BOT_GOD=0`) keeps every living character at full HP by
+writing the character records ([game internals](game-internals.md)); it prints a `DEATH` line if someone falls anyway.
+Watch for that line (and for the trip's end lines) with a monitor on every test run.
 
 Don't teleport by writing the position (`memtool setpos`). It can put the party inside the floor or out of bounds.
 Walk instead.

@@ -57,8 +57,11 @@ public sealed class MapInfo
         var memo = Path.Combine(GameFiles.CacheDir, "derived", "package", Script + ".txt");
         if (File.Exists(memo)) return File.ReadAllText(memo).Trim() is { Length: > 0 } known ? MapPackage.Get(known) : null;
         var found = SearchPackage();
+        // written whole then moved into place: another bot process reading it half-written would take it for "no package"
         Directory.CreateDirectory(Path.GetDirectoryName(memo)!);
-        File.WriteAllText(memo, found?.Name ?? "");
+        var temp = $"{memo}.{Environment.ProcessId}.tmp";
+        File.WriteAllText(temp, found?.Name ?? "");
+        try { File.Move(temp, memo, overwrite: true); } catch (IOException) { File.Delete(temp); }
         return found;
     }
 

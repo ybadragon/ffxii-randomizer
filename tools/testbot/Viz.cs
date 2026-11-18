@@ -12,7 +12,7 @@ sealed class VizForm : Form
 {
     readonly Func<(float x, float y, float z)> _pos;
     readonly Func<int> _map;
-    readonly Func<uint> _touched; // touched teleport crystals, bit n = crystal n
+    readonly Func<IReadOnlySet<int>> _touched; // key items of the touched teleport crystals (the game's destination lines)
     Ff12MapData.Crystal? _crystal; // this map's teleport crystal
     readonly System.Windows.Forms.Timer _timer = new() { Interval = 33 };
 
@@ -31,12 +31,13 @@ sealed class VizForm : Form
     // current map's exits, from the map reader: where each leads and its trigger line
     List<(int dest, List<(double ax, double az, double bx, double bz)> segs)> _exits = new();
     int _variant = -1, _loading = -1;
+    DateTime _retryAt;
 
     static readonly Color Back = Color.FromArgb(11, 15, 23), Panel = Color.FromArgb(20, 27, 40), Muted = Color.FromArgb(140, 155, 180),
         Gold = Color.FromArgb(255, 196, 64), Ice = Color.FromArgb(150, 225, 255), Hero = Color.FromArgb(255, 120, 60), Bad = Color.FromArgb(255, 80, 80);
     readonly Font _title = new("Segoe UI Semibold", 20f), _small = new("Segoe UI", 10f), _chainFont = new("Segoe UI", 11f), _label = new("Segoe UI Semibold", 9.5f);
 
-    public VizForm(Func<(float x, float y, float z)> pos, Func<int> map, Func<uint> touched)
+    public VizForm(Func<(float x, float y, float z)> pos, Func<int> map, Func<IReadOnlySet<int>> touched)
     {
         _pos = pos; _map = map; _touched = touched;
         Text = "FFXII trip viewer";
@@ -88,8 +89,20 @@ sealed class VizForm : Form
     // Reads the map from the game's files off the window's thread (the first read of an area takes a few seconds).
     void LoadMap(int map, int variant)
     {
+        if (DateTime.UtcNow < _retryAt) return;
         _loading = map;
         Task.Run(() =>
+        {
+            try { Load(); }
+            catch (Exception e)
+            {
+                // a failed read (say a cache file another bot process is writing at the same moment) must not stop the
+                // window from loading maps: try again in a second
+                Console.WriteLine($"viz: reading map 0x{map:X} failed ({e.GetType().Name}: {e.Message}); retrying");
+                BeginInvoke(() => { _loading = -1; _retryAt = DateTime.UtcNow.AddSeconds(1); });
+            }
+        });
+        void Load()
         {
             var info = Ff12MapData.MapInfo.For(map);
             var crystal = Ff12MapData.Crystals.On(map);
@@ -119,7 +132,7 @@ sealed class VizForm : Form
                 _tex = tex; _crop = crop; _ox = ox; _oy = oy; _variant = variant; _exits = exits;
                 _crystal = crystal; _place = PlaceOf(map); _script = (info?.Script ?? $"0x{map:X}") + (info?.Package is { VariantCount: > 1 } p ? $" · variant {variant}" : "");
             });
-        });
+        }
     }
 
     // The package picture with its black outside made transparent, and the box around what's drawn.
@@ -191,7 +204,7 @@ sealed class VizForm : Form
         // about to teleport from it
         if (_crystal is { } cr)
         {
-            bool touchedHere = (_touched() & (1u << cr.Number)) != 0;
+            bool touchedHere = _touched().Contains(cr.KeyItem);
             bool using_ = _trip is { } tc && tc.Status.StartsWith("teleporting") && tc.ChainIds.Length > tc.Current && tc.ChainIds[tc.Current] == _mapId;
             var col = using_ ? Gold : touchedHere ? Color.FromArgb(120, 210, 255) : Color.FromArgb(120, 140, 160);
             var cp = P(cr.CrystalX, cr.CrystalZ);
@@ -325,7 +338,7 @@ sealed class VizForm : Form
 
     /// <summary>Opens the viewer on a monitor the game isn't on (the game's borderless window covers its own monitor), or
     /// beside the game when there is only one.</summary>
-    public static void Run(Func<(float x, float y, float z)> pos, Func<int> map, Func<uint> touched, IntPtr gameWindow)
+    public static void Run(Func<(float x, float y, float z)> pos, Func<int> map, Func<IReadOnlySet<int>> touched, IntPtr gameWindow)
     {
         var t = new Thread(() =>
         {

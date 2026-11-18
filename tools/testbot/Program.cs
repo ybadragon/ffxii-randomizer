@@ -34,6 +34,38 @@ byte[] Read(long a, int n) { var b = new byte[n]; Native.ReadProcessMemory(h, (I
 // exe+2A2E750 stays frozen (seen in the Estersand Outpost, dst_a07).
 (float x, float y, float z) Pos() { var b = Read(exe + 0x21A7D20, 12); return (BitConverter.ToSingle(b, 0), BitConverter.ToSingle(b, 4), BitConverter.ToSingle(b, 8)); }
 void Cell0() { }
+// The teleport menu's lines: the saved array g_menu_telepo_dest[31] (savemem 0x0BF2; savemem starts at exe+2044480, the
+// story flag). Each touched crystal appends its key item (Crystals.cs); line i of the destination list is entry i.
+// God mode. Each character's record: max HP u32 at exe+2092938 + 0x1C8 * i, current HP 0x24 after it (the value the
+// game itself uses: writing it changes the HP on screen; the copies at exe+1F7B088 and exe+21A80A0 are refreshed from it).
+// Tops up every living character to full; reports when one falls (a hit bigger than their max HP still kills).
+const long CharHp = 0x2092938, CharStride = 0x1C8;
+void GodTick(Dictionary<int, uint> last, Action<string> report)
+{
+    for (int i = 0; i < 16; i++)
+    {
+        long a = exe + CharHp + i * CharStride;
+        var b = Read(a, 0x44);
+        uint max = BitConverter.ToUInt32(b, 0), cur = BitConverter.ToUInt32(b, 0x24), status = BitConverter.ToUInt32(b, 0x40);
+        if (max == 0 || max > 99999 || cur > max) continue;
+        if (cur == 0 && last.TryGetValue(i, out var was) && was > 0) report($"DEATH: character {i} fell (max HP {max})");
+        if (cur > 0 && cur < max) Native.WriteProcessMemory(h, (IntPtr)(a + 0x24), BitConverter.GetBytes(max), (IntPtr)4, out _);
+        // status bits at +0x40 (Immobilize = 0x4000, seen: set while immobilized, clear once free). Clears the ailments
+        // in FFXII's status order after KO (bit 0, left alone): Stone, Petrify, Stop, Sleep, Confuse, Doom, Blind, Poison,
+        // Silence, Sap, Oil, Reverse, Disable, Immobilize, Slow, Disease, Lure (bits 1-17)
+        const uint Ailments = 0x3FFFE;
+        if (cur > 0 && (status & Ailments) != 0) Native.WriteProcessMemory(h, (IntPtr)(a + 0x40), BitConverter.GetBytes(status & ~Ailments), (IntPtr)4, out _);
+        last[i] = cur;
+    }
+}
+// Runs god mode in the background of this process (trip turns it on unless FF12_BOT_GOD=0).
+void StartGod(Action<string> report)
+{
+    var last = new Dictionary<int, uint>();
+    var t = new Thread(() => { while (true) { try { GodTick(last, report); } catch { } Thread.Sleep(30); } }) { IsBackground = true };
+    t.Start();
+}
+int[] TeleportLines() { var b = Read(exe + 0x2044480 + 0xBF2, 62); return [.. Enumerable.Range(0, 31).Select(i => (int)BitConverter.ToUInt16(b, i * 2)).TakeWhile(v => v != 0)]; }
 
 // Minimap reading: the style-free edge reader by default; MMMODE=color uses the older per-colour rules.
 Minimap.Cell[,] ReadGrid(System.Drawing.Bitmap bmp) => Environment.GetEnvironmentVariable("MMMODE") switch { "color" => Minimap.Grid(bmp, ConeAngle()), "edge" => Minimap.EdgeGrid(bmp, ConeAngle()), _ => Minimap.WatershedGrid(bmp, ConeAngle()) };
@@ -274,6 +306,13 @@ switch (args[0])
                 });
             break;
         }
+    case "god":
+        {
+            // god: keeps every living character at full HP until stopped; prints a DEATH line when one falls anyway
+            Console.WriteLine("god mode on");
+            var last = new Dictionary<int, uint>();
+            while (true) { GodTick(last, s => Console.WriteLine($"{DateTime.Now:HH:mm:ss} {s}")); Thread.Sleep(30); }
+        }
     case "put":
         {
             long a = Parse(args[2]);
@@ -304,25 +343,25 @@ switch (args[0])
         {
             // viz: live window with the current map, the party, the pathfinder's route and the trip (see Viz.cs).
             // Runs until closed; start it before or during a trip.
-            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)), () => { var f = Path.Combine(Paths.Out("live"), "crystal-touch-order.txt"); return File.Exists(f) ? File.ReadAllLines(f).Select(int.Parse).Aggregate(0u, (m, n) => m | 1u << n) : 0u; }, p.MainWindowHandle);
+            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)), () => TeleportLines().ToHashSet(), p.MainWindowHandle);
             break;
         }
     case "teleport":
         {
-            // teleport <crystal number>: from this map's crystal to another (numbers: mapdata.cs crystals). Walks to the
+            // teleport <map or key item, hex>: from this map's crystal to another (list: mapdata.cs crystals). Walks to the
             // crystal (beside its landing spot, against the landing direction), opens its menu with Space, and drives the
-            // menu by reading it from memory: cursor exe+203F22C, "menu open" exe+203F238. The destination list shows one line
-            // per touched crystal in the order they were touched (the bot keeps its own touch log; see below).
+            // menu by reading it from memory: cursor exe+203F22C, "menu open" exe+203F238. Destination line i is the
+            // crystal whose key item is entry i of the game's g_menu_telepo_dest array (TeleportLines).
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             // "teleport touch": only touch this map's crystal (open its menu, choose Done), so teleports can go to it
-            bool touchOnly = args[1] == "touch";
-            int target = touchOnly ? -1 : int.Parse(args[1]);
+            bool touchOnly = args[1] == "touch", openOnly = args[1] == "open"; // "open": stop at the destination list
+            int target = touchOnly || openOnly ? -1 : Convert.ToInt32(args[1], 16);
             int mapId = BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
             var here = Ff12MapData.Crystals.On(mapId);
             var info = Ff12MapData.MapInfo.For(mapId);
             if (here is null || info is null) { Console.WriteLine($"teleport: map 0x{mapId:X} has no teleport crystal"); return 1; }
-            var dest = Ff12MapData.Crystals.List.FirstOrDefault(c => c.Number == target);
-            if (dest is null && !touchOnly) { Console.WriteLine($"teleport: no crystal number {target}"); return 1; }
+            var dest = Ff12MapData.Crystals.List.FirstOrDefault(c => c.KeyItem == target || c.Map == target);
+            if (dest is null && !touchOnly && !openOnly) { Console.WriteLine($"teleport: no crystal for 0x{target:X}"); return 1; }
             double cx = here.CrystalX, cz = here.CrystalZ;
             byte U8(long a) => Read(a, 1)[0];
             bool MenuOpen() => U8(exe + 0x203F238) == 1;
@@ -338,32 +377,33 @@ switch (args[0])
                 if (!MenuOpen()) { Steer(cx, cz, 250); var q = Pos(); Console.WriteLine($"  no menu yet; stepped to ({q.x:F2}, {q.z:F2})"); }
             }
             if (!MenuOpen()) { Console.WriteLine("teleport: the crystal menu didn't open"); return 1; }
-            // opening the menu touches the crystal: note it in the bot's touch log
-            var touchLog = Path.Combine(Paths.Out("live"), "crystal-touch-order.txt");
-            if (!File.Exists(touchLog) || !File.ReadAllLines(touchLog).Contains(here.Number.ToString())) File.AppendAllLines(touchLog, [here.Number.ToString()]);
+            // opening the menu touches the crystal (the game adds its key item to the destination lines)
             if (touchOnly)
             {
                 for (int i = 0; i < 4 && Cursor() != 2; i++) Key(Cursor() < 2 ? 'S' : 'W');
                 Key(' '); Thread.Sleep(500);
-                Console.WriteLine($"touched crystal {here.Number} ({Ff12MapData.GameFiles.PlaceName(mapId)})");
-                return 0;
+                bool listed = TeleportLines().Contains(here.KeyItem);
+                Console.WriteLine($"touched crystal 0x{here.KeyItem:X} ({Ff12MapData.GameFiles.PlaceName(mapId)}){(listed ? "" : ": NOT in the destination lines")}");
+                return listed ? 0 : 1;
             }
             // Save / Teleport / Done: cursor to Teleport
             for (int i = 0; i < 4 && Cursor() != 1; i++) Key(Cursor() < 1 ? 'S' : 'W');
             Key(' '); Thread.Sleep(500);
-            // destination list: one line per touched crystal in the order they were touched (seen 2026-11-17: Rabanastre,
-            // Dalmasca Estersand, Nalbina Fortress), then Cancel; exe+203F228 = index of the last line. Where the game keeps
-            // that order isn't found yet, so the bot keeps its own touch log (crystals it opened, in order); lines it can't
-            // account for (crystals touched before it ran, like Rabanastre's) come first.
+            if (openOnly) { Console.WriteLine($"destination list open, {U8(exe + 0x203F228)} destinations"); return 0; }
+            // destination list: line i = entry i of the game's destination array, then Cancel (exe+203F228 = index of the
+            // last line, Cancel)
             Thread.Sleep(300);
-            int lines = U8(exe + 0x203F228); // destinations = last index (the last line is Cancel)
-            var log = File.Exists(touchLog) ? File.ReadAllLines(touchLog).Select(int.Parse).ToList() : new List<int>();
-            int unknown = Math.Max(0, lines - log.Count);
-            int at = log.IndexOf(target);
-            if (at < 0 || unknown + at >= lines) { Console.WriteLine($"teleport: crystal {target} isn't in the bot's touch log ({string.Join(",", log)}), or the list is shorter ({lines})"); while (Cursor() != lines) Key(Cursor() < lines ? 'S' : 'W'); Key(' '); return 1; }
-            int line = unknown + at;
+            int lines = U8(exe + 0x203F228);
+            var dests = TeleportLines();
+            int line = Array.IndexOf(dests, dest!.KeyItem);
+            if (line < 0 || line >= lines)
+            {
+                Console.WriteLine($"teleport: 0x{dest.KeyItem:X} ({Ff12MapData.GameFiles.PlaceName(dest.Map)}) isn't a destination yet (lines: {string.Join(", ", dests.Select(d => $"0x{d:X}"))})");
+                for (int i = 0; i < 40 && Cursor() != lines; i++) Key(Cursor() < lines ? 'S' : 'W');
+                Key(' '); return 1;
+            }
             for (int i = 0; i < 40 && Cursor() != line; i++) Key(Cursor() < line ? 'S' : 'W');
-            Console.WriteLine($"teleport: crystal {target} ({Ff12MapData.GameFiles.PlaceName(dest.Map)}) is line {line} of the destination list");
+            Console.WriteLine($"teleport: 0x{dest.KeyItem:X} ({Ff12MapData.GameFiles.PlaceName(dest.Map)}) is line {line} of the destination list");
             Key(' ');
             var sw = System.Diagnostics.Stopwatch.StartNew();
             while (sw.Elapsed.TotalSeconds < 20 && BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)) == mapId) Thread.Sleep(250);
@@ -380,6 +420,7 @@ switch (args[0])
             int goalMap = Convert.ToInt32(args[1], 16);
             double? gx = args.Length > 3 ? double.Parse(args[2], ci) : null, gz = args.Length > 3 ? double.Parse(args[3], ci) : null;
             int maxMaps = args.Length > 4 ? int.Parse(args[4]) : 12;
+            if (Environment.GetEnvironmentVariable("FF12_BOT_GOD") != "0") StartGod(s => Console.WriteLine("    " + s));
             string Walk(double x, double z)
             {
                 using var pr = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, string.Format(ci, "tnav {0} {1} 240", x, z)) { UseShellExecute = false, RedirectStandardOutput = true })!;
@@ -405,6 +446,7 @@ switch (args[0])
                 { Thread.Sleep(250); var np = Pos(); still = Math.Abs(np.x - lastP.x) + Math.Abs(np.z - lastP.z) < 0.01 ? still + 1 : 0; lastP = np; }
             }
             var visited = new List<(int id, string name)>();
+            int retries = 0;
             for (int hop = 0; hop <= maxMaps; hop++)
             {
                 int mapId = MapNow();
@@ -416,20 +458,18 @@ switch (args[0])
                 {
                     if (gx is not double tx || gz is not double tz) { Console.WriteLine("TRIP DONE"); LiveState.Trip(visited, visited.Count - 1, -1, null, goalLabel, "arrived"); return 0; }
                     LiveState.Trip(visited, visited.Count - 1, -1, (tx, tz), goalLabel, "walking to the goal");
-                    var r = Walk(tx, tz); Console.WriteLine(r.StartsWith("arrived") ? "TRIP DONE" : "trip ended: " + r);
+                    var r = Walk(tx, tz); for (int k = 1; k <= 6 && !r.StartsWith("arrived") && MapNow() == mapId; k++) { Console.WriteLine($"    not there yet ({r.Trim()}); waiting 5 s and trying again ({k}/6)"); Thread.Sleep(5000); r = Walk(tx, tz); } Console.WriteLine(r.StartsWith("arrived") ? "TRIP DONE" : "trip ended: " + r);
                     LiveState.Trip(visited, visited.Count - 1, -1, (tx, tz), goalLabel, r.StartsWith("arrived") ? "arrived" : "stopped: " + r);
                     return r.StartsWith("arrived") ? 0 : 1;
                 }
                 // quickest route from here, by estimated time: walking a map costs the distance from where you enter to
                 // the exit (x1.3 for winding paths) at running speed, plus the map change; a teleport (unless
                 // FF12_BOT_TELEPORT=0) costs the walk to this map's crystal plus the menu and the teleport, and goes to any
-                // crystal the party has touched (the bot's touch log; one Teleport Stone each).
+                // crystal the party has touched (the game's destination lines; one Teleport Stone each).
                 // Only the map scripts are read here (entrances, exits, crystal spots), so planning is quick.
                 const double RunSpeed = 6, Winding = 1.3, MapChangeSeconds = 2, TeleportSeconds = 12;
                 bool teleports = Environment.GetEnvironmentVariable("FF12_BOT_TELEPORT") != "0";
-                // crystals the bot has touched (its touch log: where the game keeps this isn't found yet)
-                var touchLog = Path.Combine(Paths.Out("live"), "crystal-touch-order.txt");
-                var touchedSet = File.Exists(touchLog) ? File.ReadAllLines(touchLog).Select(int.Parse).ToHashSet() : new HashSet<int>();
+                var touchedSet = TeleportLines().ToHashSet();
                 double Span((double x, double z) a, (double x, double z) b) => Math.Sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z));
                 (double x, double z) EntranceOf(int map, int ent) =>
                     Ff12MapData.ScriptInfo.For(NameOf0(map)) is { } si && ent < si.Entrances.Count ? (si.Entrances[ent].X, si.Entrances[ent].Z) : (0, 0);
@@ -454,8 +494,8 @@ switch (args[0])
                     if (teleports && Ff12MapData.Crystals.On(m) is { } crystalHere)
                     {
                         double toCrystal = cost + Span(at, (crystalHere.CrystalX, crystalHere.CrystalZ)) * Winding / RunSpeed + TeleportSeconds;
-                        foreach (var c in Ff12MapData.Crystals.List.Where(c => c.Map != m && touchedSet.Contains(c.Number)))
-                            Relax(c.Map, (m, null, c.Number, toCrystal, (c.X, c.Z)));
+                        foreach (var c in Ff12MapData.Crystals.List.Where(c => c.Map != m && touchedSet.Contains(c.KeyItem)))
+                            Relax(c.Map, (m, null, c.KeyItem, toCrystal, (c.X, c.Z)));
                     }
                 }
                 if (!prev.ContainsKey(goalMap)) { Console.WriteLine($"trip ended: no route from 0x{mapId:X} to 0x{goalMap:X}"); return 1; }
@@ -469,9 +509,9 @@ switch (args[0])
                 if (prev[nextMap].crystal is int crystal and >= 0)
                 {
                     // teleport hop: the teleport command walks to this map's crystal and drives its menu from memory
-                    Console.WriteLine($"    teleporting to crystal {crystal} ({NameOf(nextMap)})");
+                    Console.WriteLine($"    teleporting to crystal 0x{crystal:X} ({NameOf(nextMap)})");
                     LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, null, goalLabel, $"teleporting to {NameOf(nextMap)}");
-                    using (var tp = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"teleport {crystal}") { UseShellExecute = false, RedirectStandardOutput = true })!)
+                    using (var tp = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"teleport {crystal:X}") { UseShellExecute = false, RedirectStandardOutput = true })!)
                     { while (tp.StandardOutput.ReadLine() is string line) Console.WriteLine("    " + line); tp.WaitForExit(); }
                     if (MapNow() == mapId) { Console.WriteLine("trip ended: the teleport didn't happen"); return 1; }
                     WaitPlayable();
@@ -493,8 +533,15 @@ switch (args[0])
                 while (MapNow() == mapId && push.Elapsed.TotalSeconds < 8) { var (qx, _, qz) = Pos(); Steer(qx + dx * 6, qz + dz * 6, 300); Thread.Sleep(50); }
                 var waitSw = System.Diagnostics.Stopwatch.StartNew();
                 while (waitSw.Elapsed.TotalSeconds < 30 && MapNow() == mapId) Thread.Sleep(500);
+                if (MapNow() == mapId && ++retries <= 6)
+                {
+                    // most often a battle holds the party (Immobilize, Stop, a crowd of enemies): wait a little and
+                    // plan this map again from where the party stands
+                    Console.WriteLine($"    the exit didn't lead out ({res.Trim()}); waiting 5 s and trying again ({retries}/6)");
+                    Thread.Sleep(5000); visited.RemoveAt(visited.Count - 1); hop--; continue;
+                }
                 if (MapNow() == mapId) { Console.WriteLine($"trip ended: the exit at ({ex.Mid.X:F1}, {ex.Mid.Z:F1}) did not lead out ({res})"); LiveState.Trip(visited, visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, "stopped: the exit did not lead out"); return 1; }
-                Console.WriteLine($"    map changed to 0x{MapNow():X}");
+                Console.WriteLine($"    map changed to 0x{MapNow():X}"); retries = 0;
                 WaitPlayable();
             }
             Console.WriteLine("trip ended: too many maps");
@@ -768,11 +815,14 @@ switch (args[0])
                 break;
             }
             int width = int.Parse(File.ReadAllText(widthFile));
+            // snap <name>: keep a named copy of memory now; eqsnap <name> / nesnap <name>: keep addresses equal to / different from it
+            if (args[1] == "snap") { File.WriteAllBytes(Path.Combine(dir, "snap-" + args[2] + ".bin"), now); Console.WriteLine($"snapshot {args[2]} saved"); break; }
+            byte[]? named = args[1] is "eqsnap" or "nesnap" ? File.ReadAllBytes(Path.Combine(dir, "snap-" + args[2] + ".bin")) : null;
             var before = File.ReadAllBytes(snapFile);
             long V(byte[] b, int o) => width == 1 ? b[o] : width == 2 ? BitConverter.ToInt16(b, o) : BitConverter.ToInt32(b, o);
             IEnumerable<int> cands = Enumerable.Range(0, (size - width) / width).Select(i => i * width);
             if (File.Exists(candFile)) { var cb = File.ReadAllBytes(candFile); cands = Enumerable.Range(0, cb.Length / 4).Select(i => BitConverter.ToInt32(cb, i * 4)); }
-            long n = args.Length > 2 ? long.Parse(args[2]) : 0;
+            long n = args.Length > 2 && args[1] is "eq" or "ne" ? long.Parse(args[2]) : 0;
             Func<int, bool> keep = args[1] switch
             {
                 "eq" => o => V(now, o) == n,
@@ -782,6 +832,8 @@ switch (args[0])
                 "up" => o => V(now, o) > V(before, o),
                 "down" => o => V(now, o) < V(before, o),
                 "list" => _ => true,
+                "eqsnap" => o => V(now, o) == V(named!, o),
+                "nesnap" => o => V(now, o) != V(named!, o),
                 _ => throw new ArgumentException("start | eq n | ne n | changed | same | up | down | list"),
             };
             var left = cands.Where(o => o + width <= now.Length && keep(o)).ToList();
@@ -823,6 +875,30 @@ switch (args[0])
                 {
                     if (i % w == 0) Console.WriteLine(Name(b + i));
                     int next = buf.AsSpan(i + 1).IndexOf(pat); i = next < 0 ? -1 : i + 1 + next;
+                }
+            }
+            break;
+        }
+    case "findtable":
+        {
+            // findtable <index>=<u16 value>,... : tables anywhere in the game's memory (record size 2..64, value at any
+            // even offset) where record <index> holds <value> for every pair, e.g. findtable 40=132,42=276,57=81 (hex)
+            var pairs = args[1].Split(',').Select(s => s.Split('=')).Select(p => (i: Convert.ToInt32(p[0], 16), v: (ushort)Convert.ToInt32(p[1], 16))).ToArray();
+            int maxI = pairs.Max(q => q.i);
+            foreach (var (b, s) in Regions())
+            {
+                var buf = Read(b, (int)s);
+                // anchor on the first pair's value, then check the others at each record size
+                var first = pairs[0];
+                for (int at = 0; at + 2 <= buf.Length; at += 2)
+                {
+                    if (BitConverter.ToUInt16(buf, at) != first.v) continue;
+                    for (int rsz = 2; rsz <= 64; rsz += 2)
+                    {
+                        int o = at - first.i * rsz;
+                        if (o < 0 || o + (maxI + 1) * rsz > buf.Length) continue;
+                        if (pairs.All(q => BitConverter.ToUInt16(buf, o + q.i * rsz) == q.v)) Console.WriteLine($"{Name(b + o)} record size {rsz}");
+                    }
                 }
             }
             break;
@@ -949,8 +1025,18 @@ static class Input
 
     /// <summary>Keeps exactly these movement keys down: presses the new ones, releases the rest, so running never pauses
     /// between steering updates.</summary>
+    /// <summary>Keys held down with any movement: the flee key (R2 = Left Ctrl by default; seen in game: "FLEEING" while
+    /// held), so walks don't stop to fight. FF12_BOT_FLEE=0 turns it off; another hex virtual-key code replaces it.</summary>
+    public static readonly char[] Always = Environment.GetEnvironmentVariable("FF12_BOT_FLEE") switch
+    {
+        "0" => [],
+        { Length: > 0 } f => [(char)Convert.ToInt32(f, 16)],
+        _ => [(char)0x11],
+    };
+
     public static void Keep(char[] keys)
     {
+        if (keys.Length > 0) keys = [.. keys.Union(Always)];
         foreach (var k in held.Except(keys).ToList()) { Send(k, true); held.Remove(k); }
         foreach (var k in keys.Except(held).ToList()) { Send(k, false); held.Add(k); }
     }

@@ -56,6 +56,10 @@ public sealed class MapScript
         {
             if (BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(variables + 4 + v * 8)) == 0x30000000) { StoryFlag = (ushort)v; break; }
         }
+        int ints = script + (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(script + 0x20));
+        if (ints > script && ints + 4 <= ebp.Length)
+            for (int i = 0, n = (int)BinaryPrimitives.ReadUInt32LittleEndian(ebp.AsSpan(ints)); i < n && ints + 8 + i * 4 <= ebp.Length; i++)
+                IntConstants.Add(BinaryPrimitives.ReadInt32LittleEndian(ebp.AsSpan(ints + 4 + i * 4)));
         var starts = new List<(string Name, int Start)>();
         var shiftJis = CodePagesEncodingProvider.Instance.GetEncoding(932)!;
         for (int i = 0; i < count; i++)
@@ -69,6 +73,12 @@ public sealed class MapScript
         for (int a = 0; a < ordered.Count; a++)
             Actors.Add((ordered[a].Name, ordered[a].Start, a + 1 < ordered.Count ? ordered[a + 1].Start : Math.Min(ebp.Length, table)));
     }
+
+    /// <summary>
+    /// The script's table of integer constants (header 0x20: u32 count, then i32 values). PUSHII only holds a signed
+    /// 16-bit value; larger ones are kept here and pushed by index with PUSHI (opcode 0x4E), which case values use too.
+    /// </summary>
+    public List<int> IntConstants { get; } = [];
 
     /// <summary>Each actor with the byte range of its code, in file order.</summary>
     public List<(string Name, int Start, int End)> Actors { get; } = [];

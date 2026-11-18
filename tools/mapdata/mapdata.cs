@@ -22,7 +22,7 @@ switch (args[0])
         {
             var m = MapInfo.For(Id(args[1])) ?? throw new Exception("no script for that map");
             Console.WriteLine($"{Label(m.Id)}, package {m.Package?.Name ?? "none found"}{(m.Package is { } p ? $", {p.VariantCount} minimap variant(s)" : "")}");
-            for (int e = 0; e < m.Info.Entrances.Count; e++) Console.WriteLine($"  entrance {e}: ({m.Info.Entrances[e].X:F1}, {m.Info.Entrances[e].Z:F1})");
+            for (int e = 0; e < m.Info.Entrances.Count; e++) Console.WriteLine($"  entrance {e}: ({m.Info.Entrances[e].X:F1}, {m.Info.Entrances[e].Z:F1}) facing {m.Info.Entrances[e].Facing:F2}");
             foreach (var x in m.Info.Exits)
                 Console.WriteLine($"  exit at ({x.Mid.X:F1}, {x.Mid.Z:F1}) -> {string.Join(" or ", x.Leads.Select(l => $"{GameFiles.PlaceName(l.Map)} entrance {l.Entrance}"))}");
             foreach (var b in m.Barriers) Console.WriteLine($"  barrier crossing (condition {b.Tag}): ({b.Line.A.X:F1}, {b.Line.A.Z:F1})-({b.Line.B.X:F1}, {b.Line.B.Z:F1})");

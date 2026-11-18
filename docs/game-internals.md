@@ -15,6 +15,10 @@ features", "VBF format notes").
 | `exe+21A7D20` | 3 x f32 | Position (x, y, z) of the character you control. Works in field maps and town-style maps. |
 | `exe+2A2E750` | 3 x f32 | A party position that stops updating in town-style maps (seen in the Estersand Outpost). Don't use it. |
 | `exe+1E5E528` | f32 | Camera: c = f32 at +0, s = f32 at +0x20. W moves the party along world (s, c), D along (-c, s). |
+| `exe+203F22C` | u8 | Cursor of the open dialog menu (0 = first option); also mirrored at `exe+1F7C684`. Confirmed on the crystal menu and its destination list. |
+| `exe+203F238` | u8 | 1 while a dialog menu is open (used by `memtool teleport`; `exe+203F1A2`, `203F1AC`, `203F1B0` behave the same). Same on two crystals. |
+| `exe+2A2E5F4` | u32 | Touched teleport crystals, bit n = crystal n (candidate: matches crystals 0 and 24 and the destination list; confirm when a new crystal is touched). |
+| `exe+203F1B3`, `exe+203F228` | u8 | Candidates for the option count (3) and last option index (2); not yet told apart. |
 | `exe+1F7B088`, `exe+21A80A0` | | HP copies, 0xC0 bytes per member (current, then max). These are display copies: writing to them changes nothing. |
 
 World axes: +x is east, -z is north, y is up. Neighbouring maps share world coordinates.
@@ -84,6 +88,16 @@ covered by both `dst0102` and `dst0107`). The right package is the one whose wal
 Other files: `ps2data/image/ff12/myoshiok/us/worldmap/menumap_subNN.bin` (NN = area id - 1, from `menumap_world.h`)
 holds the coarse menu-map pictures and `LCMPOS1` points. Those points are **not** exits: walking to one led onto a
 cliff.
+
+## Teleporting
+
+Crystal menu (checked 2026-11-17): walk up until "Space <name> Crystal" shows (about 4 units from the crystal's landing
+spot, straight ahead in the landing direction), Space: Save / Teleport / Done (cursor on Save); S, Space: "Select a
+destination", one line per region with a touched crystal in crystal-number order, then Cancel; pick, Space. One
+Teleport Stone per teleport (`exp_give=2000:99` gives 99). The crystal stands about 4 units from its
+landing spot in direction (-sin f, -cos f), f = the landing entrance's facing (you land facing away from it).
+`memtool teleport <n>` does all of this from memory, no screenshots; `trip` uses it for teleport hops. Cancel closes the whole menu. The destination list comes from
+the crystal scripts (`mapdata.cs crystals`).
 
 ## Crashes and hangs
 

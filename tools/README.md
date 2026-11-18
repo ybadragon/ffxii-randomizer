@@ -51,6 +51,11 @@ presses keys. Main commands:
 - `memtool trip <goalMapHex> [x z]`: walks across maps. It takes the fewest-maps route over the game's own exits,
   walks to each exit's trigger line and crosses it. In the goal map it walks to (x, z).
   Example: `trip 81 182.7 294.8` goes from Rabanastre's Eastgate to South Bank Village's save crystal.
+- `memtool teleport <crystal number>`: walks to this map's crystal, opens its menu and picks the destination by
+  reading the menu cursor and the touched-crystal bits from memory. `trip` routes through teleports too (from a map
+  with a crystal to any touched crystal; `FF12_BOT_TELEPORT=0` turns that off). Needs Teleport Stones.
+- `memtool vscan start|eq n|ne n|changed|same|up|down|list`: a value-diff scanner over the game's data, for finding
+  new memory values (do something in the game between steps).
 - `memtool viz`: a live window for recording next to the game (picture in picture). It shows the current map's
   picture, the party and its trail, the route the pathfinder is following right now (gold), every exit labelled with
   where it leads (the next one in gold), walls found on this walk, and the trip's chain of maps with the game's place

@@ -605,8 +605,11 @@ switch (args[0])
                     // teleport hop: the teleport command walks to this map's crystal and drives its menu from memory
                     Console.WriteLine($"    teleporting to crystal 0x{crystal:X} ({NameOf(nextMap)})");
                     LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, null, goalLabel, $"teleporting to {NameOf(nextMap)}");
+                    // the flee key held by this process hides the crystal's prompt for the teleport process: let go first
+                    var alwaysTp = Input.Always; Input.Always = []; Input.ReleaseAll(); Thread.Sleep(200);
                     using (var tp = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"teleport {crystal:X}") { UseShellExecute = false, RedirectStandardOutput = true })!)
                     { while (tp.StandardOutput.ReadLine() is string line) Console.WriteLine("    " + line); tp.WaitForExit(); }
+                    Input.Always = alwaysTp;
                     if (MapNow() == mapId) { Console.WriteLine("trip ended: the teleport didn't happen"); return 1; }
                     WaitPlayable();
                     continue;

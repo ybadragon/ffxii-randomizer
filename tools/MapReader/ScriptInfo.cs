@@ -128,6 +128,10 @@ public sealed class ScriptInfo
                 int sg = o + 0x10 + k * 0x20;
                 if (F(sg) == 0 && F(sg + 8) == 0 || F(sg + 16) == 0 && F(sg + 24) == 0) continue;
                 int id = (I(sg + 0x1C) >> 8) & 0xFF;
+                // some maps (The Spiritwood, vic_a02) leave the id out of the flags: there a blank first segment is
+                // followed by one segment per trigger, and the segment's place in the list is its id (__MJ_CTRL000..003
+                // bind 1..4 to the four segments after the blank)
+                if (id == 0 && k > 0) id = k;
                 if (!lines.TryGetValue(id, out var ls)) lines[id] = ls = [];
                 ls.Add(new Segment(new(F(sg), F(sg + 8)), new(F(sg + 16), F(sg + 24))));
             }

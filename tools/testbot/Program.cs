@@ -578,6 +578,8 @@ switch (args[0])
                     Input.Focus(p.MainWindowHandle);
                     for (int t = 0; t < 6 && MapNow() == mapId; t++)
                     {
+                        // the held flee key (Ctrl) hides Space prompts (seen at The Needlebrake's hidden path): let go first
+                        Input.ReleaseAll(); Thread.Sleep(400);
                         Input.Hold([' '], 120); Thread.Sleep(1200);
                         if (Read(exe + 0x203F238, 1)[0] == 1) { Input.Hold([' '], 120); Thread.Sleep(1200); }
                         if (MapNow() != mapId) break;

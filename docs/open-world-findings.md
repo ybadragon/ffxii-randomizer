@@ -16,7 +16,7 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Zertinan Caverns | Hourglass Basin's boulder ("Space Boulder") changes the quicksand; the caverns lead out through Athroza Quicksands and The Balamka Fault to the Yensa side | 2026-11-18 |
 | Henne Mines (North Entrance) | By chocobo: hire one from Gurdy in Banks of the Sogoht (30 gil; the ride starts in Haulo Green), ride through Haulo Green's exit into The Shred's south part, dismount at the mine entrance ("The chocobo refuses to go any further") and walk in. The Imperial guards there don't stop the party; the Henne Mines banner shows and the party has control | 2026-11-18 |
 | Shops | Gurdy's chocobo hire (30 gil, paid) and the Cartographers' Guild moogle (Ozmone Plain map 1700, Jahara 30) in Banks of the Sogoht | 2026-11-18 |
-| Loading a save | The autosave in Banks of the Sogoht loads at story 420 with the level-99 party | 2026-11-18 |
+| Saving and loading | Saving at South Bank Village's crystal (to slot 006, the bot's own slot; slots 001-005 are left alone); the autosave in Banks of the Sogoht loads at story 420 with the level-99 party | 2026-11-18 |
 
 ## Soft lock risk
 
@@ -35,7 +35,7 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 
 ## Not tested: the bot can't route there yet
 
-Most failed legs of the crystal sweep were the bot's own limits, not the game: airship flights (aerodrome menus), Barheim
+Most failed legs of the crystal sweep were the bot's own limits, not the game: airship flights (Rabanastre's aerodrome is reached and its Docent talks at story 420: "each counter serves a different destination"; the bot didn't find a ticket counter yet. The counter talk `乗船カウンタートーク` mapjumps to Bhujerba, Nalbina, Archades and Balfonheim), Barheim
 Passage's inner links, Ridorana, Archades, the Feywood (from Golmore through gol_c01 and gol_d01). The exit reader finds 1185 of the game's 1776 map links
 (`prefetchdata/ff12mapjump_custom_nocrystal.csv`).
 

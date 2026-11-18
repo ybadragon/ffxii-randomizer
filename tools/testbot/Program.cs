@@ -304,7 +304,7 @@ switch (args[0])
         {
             // viz: live window with the current map, the party, the pathfinder's route and the trip (see Viz.cs).
             // Runs until closed; start it before or during a trip.
-            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)), () => BitConverter.ToUInt32(Read(exe + 0x2A2E5F4, 4)), p.MainWindowHandle);
+            VizForm.Run(() => Pos(), () => BitConverter.ToUInt16(Read(exe + 0x20441F0, 2)), () => { var f = Path.Combine(Paths.Out("live"), "crystal-touch-order.txt"); return File.Exists(f) ? File.ReadAllLines(f).Select(int.Parse).Aggregate(0u, (m, n) => m | 1u << n) : 0u; }, p.MainWindowHandle);
             break;
         }
     case "teleport":
@@ -312,16 +312,17 @@ switch (args[0])
             // teleport <crystal number>: from this map's crystal to another (numbers: mapdata.cs crystals). Walks to the
             // crystal (beside its landing spot, against the landing direction), opens its menu with Space, and drives the
             // menu by reading it from memory: cursor exe+203F22C, "menu open" exe+203F238. The destination list shows one line
-            // per touched crystal in crystal-number order; touched crystals are taken from the bitmask at exe+2A2E5F4
-            // (bit n = crystal n; candidate, checked against the list's length).
+            // per touched crystal in the order they were touched (the bot keeps its own touch log; see below).
             var ci = System.Globalization.CultureInfo.InvariantCulture;
-            int target = int.Parse(args[1]);
+            // "teleport touch": only touch this map's crystal (open its menu, choose Done), so teleports can go to it
+            bool touchOnly = args[1] == "touch";
+            int target = touchOnly ? -1 : int.Parse(args[1]);
             int mapId = BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
             var here = Ff12MapData.Crystals.On(mapId);
             var info = Ff12MapData.MapInfo.For(mapId);
             if (here is null || info is null) { Console.WriteLine($"teleport: map 0x{mapId:X} has no teleport crystal"); return 1; }
             var dest = Ff12MapData.Crystals.List.FirstOrDefault(c => c.Number == target);
-            if (dest is null) { Console.WriteLine($"teleport: no crystal number {target}"); return 1; }
+            if (dest is null && !touchOnly) { Console.WriteLine($"teleport: no crystal number {target}"); return 1; }
             double cx = here.CrystalX, cz = here.CrystalZ;
             byte U8(long a) => Read(a, 1)[0];
             bool MenuOpen() => U8(exe + 0x203F238) == 1;
@@ -337,13 +338,30 @@ switch (args[0])
                 if (!MenuOpen()) { Steer(cx, cz, 250); var q = Pos(); Console.WriteLine($"  no menu yet; stepped to ({q.x:F2}, {q.z:F2})"); }
             }
             if (!MenuOpen()) { Console.WriteLine("teleport: the crystal menu didn't open"); return 1; }
+            // opening the menu touches the crystal: note it in the bot's touch log
+            var touchLog = Path.Combine(Paths.Out("live"), "crystal-touch-order.txt");
+            if (!File.Exists(touchLog) || !File.ReadAllLines(touchLog).Contains(here.Number.ToString())) File.AppendAllLines(touchLog, [here.Number.ToString()]);
+            if (touchOnly)
+            {
+                for (int i = 0; i < 4 && Cursor() != 2; i++) Key(Cursor() < 2 ? 'S' : 'W');
+                Key(' '); Thread.Sleep(500);
+                Console.WriteLine($"touched crystal {here.Number} ({Ff12MapData.GameFiles.PlaceName(mapId)})");
+                return 0;
+            }
             // Save / Teleport / Done: cursor to Teleport
             for (int i = 0; i < 4 && Cursor() != 1; i++) Key(Cursor() < 1 ? 'S' : 'W');
             Key(' '); Thread.Sleep(500);
-            // destination list: touched crystals in number order
-            uint touched = BitConverter.ToUInt32(Read(exe + 0x2A2E5F4, 4));
-            if ((touched & (1u << target)) == 0) { Console.WriteLine($"teleport: crystal {target} hasn't been touched yet (touched bits {touched:X8})"); Key('S'); return 1; }
-            int line = Enumerable.Range(0, target).Count(n => (touched & (1u << n)) != 0);
+            // destination list: one line per touched crystal in the order they were touched (seen 2026-11-17: Rabanastre,
+            // Dalmasca Estersand, Nalbina Fortress), then Cancel; exe+203F228 = index of the last line. Where the game keeps
+            // that order isn't found yet, so the bot keeps its own touch log (crystals it opened, in order); lines it can't
+            // account for (crystals touched before it ran, like Rabanastre's) come first.
+            Thread.Sleep(300);
+            int lines = U8(exe + 0x203F228); // destinations = last index (the last line is Cancel)
+            var log = File.Exists(touchLog) ? File.ReadAllLines(touchLog).Select(int.Parse).ToList() : new List<int>();
+            int unknown = Math.Max(0, lines - log.Count);
+            int at = log.IndexOf(target);
+            if (at < 0 || unknown + at >= lines) { Console.WriteLine($"teleport: crystal {target} isn't in the bot's touch log ({string.Join(",", log)}), or the list is shorter ({lines})"); while (Cursor() != lines) Key(Cursor() < lines ? 'S' : 'W'); Key(' '); return 1; }
+            int line = unknown + at;
             for (int i = 0; i < 40 && Cursor() != line; i++) Key(Cursor() < line ? 'S' : 'W');
             Console.WriteLine($"teleport: crystal {target} ({Ff12MapData.GameFiles.PlaceName(dest.Map)}) is line {line} of the destination list");
             Key(' ');
@@ -405,11 +423,13 @@ switch (args[0])
                 // quickest route from here, by estimated time: walking a map costs the distance from where you enter to
                 // the exit (x1.3 for winding paths) at running speed, plus the map change; a teleport (unless
                 // FF12_BOT_TELEPORT=0) costs the walk to this map's crystal plus the menu and the teleport, and goes to any
-                // crystal the party has touched (bitmask at exe+2A2E5F4, bit n = crystal n; one Teleport Stone each).
+                // crystal the party has touched (the bot's touch log; one Teleport Stone each).
                 // Only the map scripts are read here (entrances, exits, crystal spots), so planning is quick.
                 const double RunSpeed = 6, Winding = 1.3, MapChangeSeconds = 2, TeleportSeconds = 12;
                 bool teleports = Environment.GetEnvironmentVariable("FF12_BOT_TELEPORT") != "0";
-                uint touched = BitConverter.ToUInt32(Read(exe + 0x2A2E5F4, 4));
+                // crystals the bot has touched (its touch log: where the game keeps this isn't found yet)
+                var touchLog = Path.Combine(Paths.Out("live"), "crystal-touch-order.txt");
+                var touchedSet = File.Exists(touchLog) ? File.ReadAllLines(touchLog).Select(int.Parse).ToHashSet() : new HashSet<int>();
                 double Span((double x, double z) a, (double x, double z) b) => Math.Sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z));
                 (double x, double z) EntranceOf(int map, int ent) =>
                     Ff12MapData.ScriptInfo.For(NameOf0(map)) is { } si && ent < si.Entrances.Count ? (si.Entrances[ent].X, si.Entrances[ent].Z) : (0, 0);
@@ -434,7 +454,7 @@ switch (args[0])
                     if (teleports && Ff12MapData.Crystals.On(m) is { } crystalHere)
                     {
                         double toCrystal = cost + Span(at, (crystalHere.CrystalX, crystalHere.CrystalZ)) * Winding / RunSpeed + TeleportSeconds;
-                        foreach (var c in Ff12MapData.Crystals.List.Where(c => c.Map != m && (touched & (1u << c.Number)) != 0))
+                        foreach (var c in Ff12MapData.Crystals.List.Where(c => c.Map != m && touchedSet.Contains(c.Number)))
                             Relax(c.Map, (m, null, c.Number, toCrystal, (c.X, c.Z)));
                     }
                 }
@@ -769,6 +789,42 @@ switch (args[0])
             File.WriteAllBytes(snapFile, now);
             Console.WriteLine($"{left.Count} addresses left");
             foreach (var o in left.Take(args[1] == "list" ? int.MaxValue : 25)) Console.WriteLine($"  exe+{o:X}: {V(before, o)} -> {V(now, o)}");
+            break;
+        }
+    case "findtext":
+        {
+            // findtext <text>: where a text sits in the game's memory, in the game's own encoding (A=0x20, a=0x3A, space=0x04),
+            // ASCII and UTF-16 (for finding menu and dialog text buffers)
+            string t = args[1];
+            byte Game(char ch) => ch == ' ' ? (byte)0x04 : char.IsUpper(ch) ? (byte)(0x20 + ch - 'A') : char.IsLower(ch) ? (byte)(0x3A + ch - 'a') : (byte)ch;
+            var patterns = new (string kind, byte[] bytes)[] { ("game", t.Select(Game).ToArray()), ("ascii", System.Text.Encoding.ASCII.GetBytes(t)), ("utf16", System.Text.Encoding.Unicode.GetBytes(t)) };
+            foreach (var (b, s) in Regions())
+            {
+                var buf = Read(b, (int)s);
+                foreach (var (kind, pat) in patterns)
+                    for (int i = buf.AsSpan().IndexOf(pat); i >= 0; )
+                    {
+                        Console.WriteLine($"{kind,-6} {Name(b + i)}");
+                        int next = buf.AsSpan(i + 1).IndexOf(pat); i = next < 0 ? -1 : i + 1 + next;
+                    }
+            }
+            break;
+        }
+    case "findseq":
+        {
+            // findseq <width 1|2|4> <n,n,...>: where a sequence of values sits in the game's memory (e.g. a list of ids)
+            int w = int.Parse(args[1]);
+            var vals = args[2].Split(',').Select(long.Parse).ToArray();
+            var pat = vals.SelectMany(v => w == 1 ? new[] { (byte)v } : w == 2 ? BitConverter.GetBytes((short)v) : BitConverter.GetBytes((int)v)).ToArray();
+            foreach (var (b, s) in Regions())
+            {
+                var buf = Read(b, (int)s);
+                for (int i = buf.AsSpan().IndexOf(pat); i >= 0;)
+                {
+                    if (i % w == 0) Console.WriteLine(Name(b + i));
+                    int next = buf.AsSpan(i + 1).IndexOf(pat); i = next < 0 ? -1 : i + 1 + next;
+                }
+            }
             break;
         }
     case "posscan":

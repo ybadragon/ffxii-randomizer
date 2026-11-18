@@ -17,7 +17,8 @@ features", "VBF format notes").
 | `exe+1E5E528` | f32 | Camera: c = f32 at +0, s = f32 at +0x20. W moves the party along world (s, c), D along (-c, s). |
 | `exe+203F22C` | u8 | Cursor of the open dialog menu (0 = first option); also mirrored at `exe+1F7C684`. Confirmed on the crystal menu and its destination list. |
 | `exe+203F238` | u8 | 1 while a dialog menu is open (used by `memtool teleport`; `exe+203F1A2`, `203F1AC`, `203F1B0` behave the same). Same on two crystals. |
-| `exe+2A2E5F4` | u32 | Touched teleport crystals, bit n = crystal n (candidate: matches crystals 0 and 24 and the destination list; confirm when a new crystal is touched). |
+| `exe+204586A` | u8 | Touched-crystal bits (South Bank Village set 0x40, West Barbican 0x10; the layout isn't worked out). |
+| `exe+203F228` | u8 | Index of the open menu's last line (lines = value + 1). |
 | `exe+203F1B3`, `exe+203F228` | u8 | Candidates for the option count (3) and last option index (2); not yet told apart. |
 | `exe+1F7B088`, `exe+21A80A0` | | HP copies, 0xC0 bytes per member (current, then max). These are display copies: writing to them changes nothing. |
 
@@ -96,7 +97,11 @@ spot, straight ahead in the landing direction), Space: Save / Teleport / Done (c
 destination", one line per region with a touched crystal in crystal-number order, then Cancel; pick, Space. One
 Teleport Stone per teleport (`exp_give=2000:99` gives 99). The crystal stands about 4 units from its
 landing spot in direction (-sin f, -cos f), f = the landing entrance's facing (you land facing away from it).
-`memtool teleport <n>` does all of this from memory, no screenshots; `trip` uses it for teleport hops. Cancel closes the whole menu. The destination list comes from
+`memtool teleport <n>` does all of this from memory, no screenshots; `trip` uses it for teleport hops.
+The destination list is in **touch order** (one line per region with a touched crystal; seen: Rabanastre, Dalmasca
+Estersand, Nalbina Fortress after touching South Bank Village then West Barbican), not crystal or region order. Where the
+game keeps that order isn't found yet: the bot keeps its own touch log (work/bot/live/crystal-touch-order.txt) and
+places lines it can't account for first. Regions with two touched crystals (a second-level list?) aren't seen yet. Cancel closes the whole menu. The destination list comes from
 the crystal scripts (`mapdata.cs crystals`).
 
 ## Crashes and hangs

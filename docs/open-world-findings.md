@@ -18,6 +18,12 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Shops | Gurdy's chocobo hire (30 gil, paid) and the Cartographers' Guild moogle (Ozmone Plain map 1700, Jahara 30) in Banks of the Sogoht | 2026-11-18 |
 | Loading a save | The autosave in Banks of the Sogoht loads at story 420 with the level-99 party | 2026-11-18 |
 
+## Soft lock risk
+
+| Where | What happens | Why (from the scripts) |
+| --- | --- | --- |
+| The Shred (south part) and the Henne Mines North Entrance, on foot | Reached by chocobo (above), the chocobo won't enter the mine, so the party gets off. On foot every way out of The Shred's south part is blocked: tall grass at the exits to Haulo Green and Field of Light Winds (walked into both, 2026-11-18); past the North Entrance the gate and the double door are shut (below), so the Henne Mines crystal can't be reached. Entering or leaving the mine autosaves there. | The Shred's wild chocobo (`野良騎乗チョコボ`, at (323.7, 289.6), seen wandering there) is the way out; its script checks `haveitem(0x20D8)` (Spoiled Gysahl Greens, loot) and opens the food window. Without greens the player can only reload an older save. Not seen in game: riding it out with greens (the bird wanders and the bot couldn't face it). Possible fixes: give Gysahl Greens with `openworld`, or open the Henne Mines doors (`ギミック扉`, story < 1830). |
+
 ## Blocked: worth a look
 
 | Where | What blocks | Why (from the scripts) |

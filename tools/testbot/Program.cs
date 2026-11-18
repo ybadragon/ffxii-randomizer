@@ -527,10 +527,23 @@ switch (args[0])
                 LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, $"heading for the exit to {NameOf(nextMap)}");
                 // read the next map (package match, minimap pictures) while walking this one, so the change doesn't wait on it
                 var prefetch = Task.Run(() => { if (Ff12MapData.MapInfo.For(nextMap)?.Package is { } np) for (int v = 0; v < np.VariantCount; v++) np.Minimap(v); });
-                var res = Walk(ex.Mid.X - dx * 2.5, ex.Mid.Z - dz * 2.5);
-                // cross the line: keep walking outwards (from the map's entrance by the line through the line's middle)
+                var res = Walk(ex.Mid.X - dx * (ex.Interact ? 1.2 : 2.5), ex.Mid.Z - dz * (ex.Interact ? 1.2 : 2.5));
                 var push = System.Diagnostics.Stopwatch.StartNew();
-                while (MapNow() == mapId && push.Elapsed.TotalSeconds < 8) { var (qx, _, qz) = Pos(); Steer(qx + dx * 6, qz + dz * 6, 300); Thread.Sleep(50); }
+                if (ex.Interact)
+                {
+                    // a door or gate: its actor shows the Space prompt at the line; press Space (a step closer between
+                    // tries), and confirm a question if one opens (menu open flag exe+203F238)
+                    Input.Focus(p.MainWindowHandle);
+                    for (int t = 0; t < 6 && MapNow() == mapId; t++)
+                    {
+                        Input.Hold([' '], 120); Thread.Sleep(1200);
+                        if (Read(exe + 0x203F238, 1)[0] == 1) { Input.Hold([' '], 120); Thread.Sleep(1200); }
+                        if (MapNow() != mapId) break;
+                        var (qx, _, qz) = Pos(); Steer(qx + dx * 3, qz + dz * 3, 250);
+                    }
+                }
+                // cross the line: keep walking outwards (from the map's entrance by the line through the line's middle)
+                while (!ex.Interact && MapNow() == mapId && push.Elapsed.TotalSeconds < 8) { var (qx, _, qz) = Pos(); Steer(qx + dx * 6, qz + dz * 6, 300); Thread.Sleep(50); }
                 var waitSw = System.Diagnostics.Stopwatch.StartNew();
                 while (waitSw.Elapsed.TotalSeconds < 30 && MapNow() == mapId) Thread.Sleep(500);
                 if (MapNow() == mapId && ++retries <= 6)

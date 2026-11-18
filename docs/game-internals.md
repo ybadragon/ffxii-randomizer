@@ -57,8 +57,14 @@ Map script data, at offsets relative to the script base (u32 at file offset 0x10
 - **Linking a line to its destination**: the actor whose code starts with `PUSHII id; CALLPOPA 0x11E` owns trigger
   id. Its `PUSHII map; PUSHII entrance; PUSHII 0; CALLPOPA 0x8D` is where that exit leads. One exit can lead to
   different maps depending on the story.
+- **Doors and gates** (actor type 1: the low byte of the u32 at +4 in the actor's 0x30-byte table entry) show a
+  Space prompt with `PUSHII k; CALLPOPA 0x176` (fieldsign) and own trigger line **0x14 + k**; their mapjump is where
+  the door leads. Used with Space at the line, not by walking across it (Southgate: `gate_south` fieldsign 0 = line
+  0x14 into the city, the downtown door fieldsign 1 = line 0x15).
 
-`tools/MapReader` (`ScriptInfo`) reads all of this. The game has 723 exits across its maps.
+`tools/MapReader` (`ScriptInfo`) reads all of this. Against the game's own link table
+(`prefetchdata/ff12mapjump_custom_nocrystal.csv`, 1776 map-to-map links), it finds 724. The rest are mostly airship
+flights (aerodrome menus), shop interiors, puzzle doors and other story versions of a map.
 
 Scripts also hold a `FF12POS3` table (positions with sizes, such as spawn areas) and `FF12AR03` (not decoded).
 

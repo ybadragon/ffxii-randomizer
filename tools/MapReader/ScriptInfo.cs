@@ -16,8 +16,9 @@ public readonly record struct Segment(Point2 A, Point2 B)
 }
 
 /// <summary>An exit: the trigger line that runs a mapjump, and every map and entrance it can lead to (some lead to
-/// different maps at different story points).</summary>
-public sealed record Exit(int TriggerId, string Actor, IReadOnlyList<Segment> Line, IReadOnlyList<(int Map, int Entrance)> Leads)
+/// different maps at different story points). Interact: a door or gate, used with Space at the line (its actor shows
+/// the prompt with fieldsign) rather than by walking across it.</summary>
+public sealed record Exit(int TriggerId, string Actor, IReadOnlyList<Segment> Line, IReadOnlyList<(int Map, int Entrance)> Leads, bool Interact = false)
 {
     public Point2 Mid => new(Line.Average(s => s.Mid.X), Line.Average(s => s.Mid.Z));
     public double DistanceTo(Point2 p) => Line.Min(s => s.DistanceTo(p));
@@ -31,12 +32,16 @@ public sealed record VariantSwitch(string Actor, IReadOnlyList<int> Variants, IR
 /// base+0x54 -> entrances (u32 count, 0x20-byte entries x, y, z, facing); base+0x70 -> trigger-line lists (u32 count,
 /// u32 offsets; each list: u32 n, then from +0x10 n segments of 0x20 bytes (ax, ay, az, 1)(bx, by, bz, flags), trigger
 /// id = (flags >> 8) &amp; 0xFF). The actor whose code starts "PUSHII id; CALLPOPA setmapjumpgroup" owns a trigger id;
-/// its "PUSHII map; PUSHII entrance; PUSHII 0; CALLPOPA mapjump" is where the exit leads. Call numbers per ff12-script.
+/// its "PUSHII map; PUSHII entrance; PUSHII 0; CALLPOPA mapjump" is where the exit leads. Doors and gates (actor type 1
+/// in the actor table) instead show a Space prompt with "PUSHII k; CALLPOPA fieldsign", which belongs to trigger line
+/// 0x14 + k (checked on Southgate: gate_south 0 = line 0x14, the downtown door 1 = 0x15; Necrohol's ten doors 0-9).
+/// Call numbers per ff12-script.
 /// </summary>
 public sealed class ScriptInfo
 {
     // script VM calls (CALLPOPA operands), from ffgriever's ff12-script
-    const ushort MapJump = 0x008D, SetMapJumpGroup = 0x011E, SetNaviMapIndex = 0x021B, LastMap = 0x0092;
+    const ushort MapJump = 0x008D, SetMapJumpGroup = 0x011E, SetNaviMapIndex = 0x021B, LastMap = 0x0092, FieldSign = 0x0176;
+    const int FieldSignLines = 0x14;
     static readonly HashSet<ushort> PlayerUse = [0x0176 /* fieldsign */, 0x002A /* reqenable */, 0x0013 /* askpos */, 0x014A /* aaske */];
     const byte PushII = 0x4F, CallPopA = 0x5D, Call = 0x58;
 
@@ -62,13 +67,19 @@ public sealed class ScriptInfo
         var owner = new Dictionary<int, string>();
         var leads = new Dictionary<int, List<(int, int)>>();
         var switches = new List<VariantSwitch>();
+        var interact = new HashSet<int>();
         foreach (var a in script.Actors)
         {
             var ins = script.Instructions(a).ToList();
             int trig = -1;
             for (int i = 1; i < Math.Min(ins.Count, 8); i++)
                 if (ins[i].Op == CallPopA && ins[i].Operand == SetMapJumpGroup && ins[i - 1].Op == PushII) trig = ins[i - 1].Operand;
-            if (trig >= 0) owner[trig] = a.Name;
+            // doors and gates: "PUSHII k; CALLPOPA fieldsign" shows the Space prompt on trigger line 0x14 + k (Southgate:
+            // gate_south fieldsign 0 = line 0x14, the downtown door fieldsign 1 = line 0x15)
+            if (trig < 0)
+                for (int i = 1; i < Math.Min(ins.Count, 12); i++)
+                    if (ins[i].Op == CallPopA && ins[i].Operand == FieldSign && ins[i - 1].Op == PushII) { trig = FieldSignLines + ins[i - 1].Operand; interact.Add(trig); break; }
+            if (trig >= 0) owner.TryAdd(trig, a.Name);
             var variants = new SortedSet<int>();
             for (int i = 3; i < ins.Count; i++)
             {
@@ -106,7 +117,7 @@ public sealed class ScriptInfo
                 ls.Add(new Segment(new(F(sg), F(sg + 8)), new(F(sg + 16), F(sg + 24))));
             }
         }
-        Exits = lines.Where(kv => leads.ContainsKey(kv.Key)).Select(kv => new Exit(kv.Key, owner[kv.Key], kv.Value, leads[kv.Key])).ToList();
+        Exits = lines.Where(kv => leads.ContainsKey(kv.Key)).Select(kv => new Exit(kv.Key, owner[kv.Key], kv.Value, leads[kv.Key], interact.Contains(kv.Key))).ToList();
         OtherTriggers = lines.Where(kv => !leads.ContainsKey(kv.Key)).SelectMany(kv => kv.Value.Select(s => (kv.Key, owner.GetValueOrDefault(kv.Key), s))).ToList();
 
         var pts = new List<(int, double, double, double, double, double)>();

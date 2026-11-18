@@ -560,6 +560,23 @@ switch (args[0])
                     // most often a battle holds the party (Immobilize, Stop, a crowd of enemies): wait a little and
                     // plan this map again from where the party stands
                     Console.WriteLine($"    the exit didn't lead out ({res.Trim()}); waiting 5 s and trying again ({retries}/2)");
+                    // floor a switch changes ("used by walking up to it and pressing Space"): use the nearest
+                    // interaction spot of the map (ScriptInfo.InteractSpots), then plan again
+                    if (res.Contains("pressing Space") && here.Info.InteractSpots.Count > 0)
+                    {
+                        var (qx0, _, qz0) = Pos();
+                        var spot = here.Info.InteractSpots.OrderBy(s => Math.Pow(s.X - qx0, 2) + Math.Pow(s.Z - qz0, 2)).First();
+                        if (Math.Sqrt(Math.Pow(spot.X - qx0, 2) + Math.Pow(spot.Z - qz0, 2)) < 25)
+                        {
+                            Console.WriteLine($"    using the switch at ({spot.X:F1}, {spot.Z:F1}) with Space");
+                            Input.Focus(p.MainWindowHandle);
+                            for (int s = 0; s < 40; s++) { var (qx, _, qz) = Pos(); if (Math.Abs(qx - spot.X) + Math.Abs(qz - spot.Z) < 1.0) break; Steer(spot.X, spot.Z, 150); }
+                            Input.ReleaseAll(); Thread.Sleep(300);
+                            Input.Hold([' '], 120); Thread.Sleep(1200);
+                            if (Read(exe + 0x203F238, 1)[0] == 1) { Input.Hold([' '], 120); Thread.Sleep(1200); }
+                            Thread.Sleep(8000); // the scene that shows the change
+                        }
+                    }
                     Thread.Sleep(5000); visited.RemoveAt(visited.Count - 1); hop--; continue;
                 }
                 if (MapNow() == mapId && unusable.Add((mapId, ex.TriggerId)))

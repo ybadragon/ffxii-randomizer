@@ -52,6 +52,12 @@ public sealed class ScriptInfo
     /// <summary>The script's FF12POS3 table: named spots (index, position, size).</summary>
     public IReadOnlyList<(int Index, double X, double Y, double Z, double Width, double Depth)> Points { get; }
     public IReadOnlyList<VariantSwitch> VariantSwitches { get; }
+    /// <summary>
+    /// Spots where a Space prompt shows for an object with no trigger line (base+0x74: u32 count, then 0x1C-byte entries
+    /// x, y, z, width, depth, 0, 0). Checked in Hourglass Basin (ztc_a03): "Space Boulder" shows at (317.1, 188.1), the
+    /// first entry; using it changes the quicksand (the 流砂ギミック実行 actor switches the minimap variant).
+    /// </summary>
+    public IReadOnlyList<(double X, double Y, double Z, double Width, double Depth)> InteractSpots { get; }
 
     public static ScriptInfo? For(string scriptName) => scriptName.Length < 5 ? null :
         GameFiles.Get($"ps2data/plan_master/us/plan_map/{scriptName[..5]}/{scriptName}/global/{scriptName}.ebp") is { Length: > 0x80 } b ? new ScriptInfo(b) : null;
@@ -96,6 +102,15 @@ public sealed class ScriptInfo
                     ins.Any(x => x.Op is Call or CallPopA && x.Operand == LastMap), ins.Any(x => x.Op is Call or CallPopA && PlayerUse.Contains(x.Operand))));
         }
         VariantSwitches = switches;
+        var spots = new List<(double, double, double, double, double)>();
+        int sp = I(0x10) + I(I(0x10) + 0x74);
+        if (sp > I(0x10) && sp + 4 <= b.Length)
+            for (int k = 0, n = I(sp); k < n && k < 64 && sp + 4 + (k + 1) * 0x1C <= b.Length; k++)
+            {
+                int o = sp + 4 + k * 0x1C;
+                spots.Add((F(o), F(o + 4), F(o + 8), F(o + 12), F(o + 16)));
+            }
+        InteractSpots = spots;
 
         int bs = I(0x10);
         var ents = new List<(double, double, double, double)>();

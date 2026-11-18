@@ -13,6 +13,7 @@ using Ff12MapData;
 //   dotnet run mapdata.cs -- crystals                     every teleport destination (number, map, landing spot)
 //   dotnet run mapdata.cs -- reach <map>... | all         exits the walk mesh says can't be walked to, per entrance
 //   dotnet run mapdata.cs -- packages <map>              the area's map packages: entrances on their floor, floor pieces
+//   dotnet run mapdata.cs -- skips [min]                 scenes that move the story forward from any earlier point
 if (args.Length == 0) { Console.WriteLine("map <map> | route <from> <to> | explain <map> <x> <z> | scan | draw <map> <png> [variant] | actor <map> <actor>"); return 1; }
 int Id(string s) => GameFiles.MapId(s) ?? Convert.ToInt32(s, 16);
 string Label(int id) => $"{GameFiles.PlaceName(id)} ({GameFiles.ScriptName(id)}, 0x{id:X})";
@@ -49,6 +50,27 @@ switch (args[0])
             var path = new List<int>(); for (int c = to; c != from; c = prev[c].map) path.Add(c); path.Reverse();
             Console.WriteLine($"{Label(from)} -> {Label(to)}: {path.Count} map changes");
             foreach (var c in path) Console.WriteLine($"  on {GameFiles.PlaceName(prev[c].map)}: exit at ({prev[c].exit.Mid.X:F1}, {prev[c].exit.Mid.Z:F1}) -> {GameFiles.PlaceName(c)} entrance {prev[c].entrance}");
+            return 0;
+        }
+    case "skips":
+        {
+            // skips [min]: scripts that check story < N and then set story = N (N > min, default 420): a scene that fires at
+            // any earlier story point and moves the story forward. Harmless where the story is the only way in; with open
+            // world it skips ahead (Freezing Gorge: 420 -> 1973, seen in game)
+            int min = args.Length > 1 ? int.Parse(args[1]) : 420;
+            foreach (int id in GameFiles.AllMapIds)
+            {
+                var n = GameFiles.ScriptName(id); if (n is null || n.Length < 5) continue;
+                if (GameFiles.Get($"ps2data/plan_master/us/plan_map/{n[..5]}/{n}/global/{n}.ebp") is not { Length: > 0x80 } b) continue;
+                Ff12Randomizer.Core.GameData.MapScript s; try { s = new(b); } catch { continue; }
+                var checks = s.StoryChecks().ToList();
+                foreach (var w in s.StoryWrites().Where(w => w.Value > min).DistinctBy(w => (w.Actor, w.Value)))
+                {
+                    if (!checks.Any(c => c.Actor == w.Actor && (c.Compare == "<" && c.Value == w.Value || c.Compare == "<=" && c.Value == w.Value - 1))) continue;
+                    var others = checks.Where(c => c.Actor == w.Actor && c.Compare is not ("<" or "<=")).Select(c => c.Compare + c.Value).Distinct();
+                    Console.WriteLine($"{w.Value,5} {Label(id)} {w.Actor}: other checks {string.Join(" ", others)}");
+                }
+            }
             return 0;
         }
     case "packages":

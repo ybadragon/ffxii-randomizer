@@ -14,6 +14,9 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Teleport crystals | Touched and teleported between: Southgate, West Barbican, South Bank Village, Babbling Vale, Banks of the Sogoht, Yensa Border Tunnel, Road of Verdant Praise, The Parting Glade | 2026-11-17/18 |
 | Golmore Jungle | With Lente's Tear (given by the bot), through the seal to Whisperleaf Way and The Parting Glade | 2026-11-18 |
 | Zertinan Caverns | Hourglass Basin's boulder ("Space Boulder") changes the quicksand; the caverns lead out through Athroza Quicksands and The Balamka Fault to the Yensa side | 2026-11-18 |
+| Henne Mines (North Entrance) | By chocobo: hire one from Gurdy in Banks of the Sogoht (30 gil; the ride starts in Haulo Green), ride through Haulo Green's exit into The Shred's south part, dismount at the mine entrance ("The chocobo refuses to go any further") and walk in. The Imperial guards there don't stop the party; the Henne Mines banner shows and the party has control | 2026-11-18 |
+| Shops | Gurdy's chocobo hire (30 gil, paid) and the Cartographers' Guild moogle (Ozmone Plain map 1700, Jahara 30) in Banks of the Sogoht | 2026-11-18 |
+| Loading a save | The autosave in Banks of the Sogoht loads at story 420 with the level-99 party | 2026-11-18 |
 
 ## Blocked: worth a look
 
@@ -21,8 +24,7 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | --- | --- | --- |
 | The Needlebrake, exit to Whisperleaf Way (Golmore Jungle) | The blue seal, until the party has Lente's Tear | `HED_DIREC` opens it only with key item **Lente's Tear** (0x80B7); `rewards.csv` places it in Eruyt Village. Confirmed: with the item given, the seal opens. |
 | Eruyt Village, The Spiritwood: gate to vic_a04 | A shut gate (screenshot kept by the bot) | Static scenery: the exit lies off the walk mesh and no actor switches walls, floors or map-jump flags there, so it is only used by scenes. Lente's Tear comes from the Eruyt story event (around story 1740, `常駐監督`), so with `openworld` alone Golmore Jungle waits for that point in the story; the separate OpenWorld rewards (`rewards.csv`) place Lente's Tear in Eruyt after the Henne Mines. |
-| Haulo Green and Field of Light Winds, exits to The Shred | Grass and rock where the exits are; the exits lie off the maps' walk meshes | No story check in either map's script. The Shred itself is reachable through The Greensnake. |
-| The Shred, exit to North Entrance (Henne Mines) | Entering from The Greensnake, the live minimap shows the rest of The Shred cut off: no route to its exits to Haulo Green, Field of Light Winds or North Entrance (2026-11-18) | `ヘネ通行制限` (story < 1790) is on the gate list (rows 33-34). The map's own walk mesh (`mapdata draw 218`) is two separate pieces: a north piece with only The Greensnake exit, and a south piece with the North Entrance exit; the Haulo Green and Field of Light Winds exits lie off both. No walking route joins The Greensnake to the Henne Mines here; whatever links the pieces (a drop, a lift, a scene) isn't in the walk data. With the Haulo Green and Field of Light Winds passages also blocked, the Henne Mines may be unreachable at story 420. Next: look in game for a drop or prompt along the north piece's south edge. |
+| The Shred, on foot | The Greensnake leads only to The Shred's north part, a dead end on foot; the exits from Haulo Green and Field of Light Winds are chocobo paths (off the walk mesh on foot, and Haulo Green's way out to Banks of the Sogoht takes the chocobo back) | The Shred's walk mesh is two pieces split by cliff walls (wall edges between touching triangles). Haulo Green and Field of Light Winds switch exit group 115 by `getchocobomodebit`. Not a block: the Henne Mines are reached by chocobo (above). |
 
 ## Not tested: the bot can't route there yet
 

@@ -19,6 +19,12 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Shops | Gurdy's chocobo hire (30 gil, paid) and the Cartographers' Guild moogle (Ozmone Plain map 1700, Jahara 30) in Banks of the Sogoht | 2026-11-18 |
 | Saving and loading | Saving at South Bank Village's crystal (to slot 006, the bot's own slot; slots 001-005 are left alone); the autosave in Banks of the Sogoht loads at story 420 with the level-99 party | 2026-11-18 |
 
+## Story skip
+
+| Where | What happens | Why (from the scripts) |
+| --- | --- | --- |
+| Paramina Rift, Freezing Gorge (pbc_a03) | Walking in from Head of the Silverflow at story 420 (reached through Golmore Jungle with Lente's Tear), at (264.4, 91.8) a scene starts, the story flag jumps from 420 to **1973** and the party is moved to the Archadian scene map `alc_z01` (whose director sets 2000). Seen in game by the crystal sweep, 2026-11-18. | `常駐ディレクター` in pbc_a03: `story >= 0 && story < 1973` -> `eventplay`, `story = 1973`, mapjump. In the main story nobody reaches Freezing Gorge before about 1970, so the check has no lower bound; with `openworld` any earlier visit skips everything in between. Not on the gate list. Fix candidates: a gate-list row that keeps Paramina Rift closed until its story point, or one that raises the lower bound of this check so the scene waits for the story. |
+
 ## Soft lock risk
 
 | Where | What happens | Why (from the scripts) |

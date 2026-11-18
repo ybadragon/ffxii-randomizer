@@ -776,6 +776,9 @@ switch (args[0])
                     if (moved < 1)
                     {
                         if (++stuckTries > 4) { Console.WriteLine($"stuck at {now.x:F2} {now.z:F2}: moved {moved:F2} units in 5 s, {stuckTries - 1} blocks added did not help"); Explain(now.x, now.z); Live("stuck"); return 1; }
+                        // a battle menu left open (Space with no prompt opens it: "Attack / No Available Targets") holds the
+                        // party still; C (back) closes it and does nothing in the field
+                        Input.Hold(['C'], 80); Thread.Sleep(150); Input.Hold(['C'], 80);
                         // a wall the texture doesn't show: block the corridor just ahead, plan around it (this walk only: barriers change with the story)
                         var atp = tm.ToPx(now.x, now.z); var np = tm.ToPx(nx, nz);
                         double ax = np.u - atp.u, az = np.v - atp.v, len = Math.Max(0.01, Math.Sqrt(ax * ax + az * az));

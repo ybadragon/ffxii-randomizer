@@ -1,0 +1,38 @@
+# Open world: what the test bot found
+
+Test setup: `install 1 exp_freeroam exp_flag=01A4 exp_map=81 exp_entry=0 exp_level=99 exp_weak=dst exp_give=2000:99 openworld`
+(story flag 420, start at South Bank Village, level 99, 99 Teleport Stones, open world on). The bot walked with god
+mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are when it was seen.
+
+## Works (seen in game)
+
+| Where | What | Seen |
+| --- | --- | --- |
+| Rabanastre, Giza Plains, Ozmone Plain | Walking from South Bank Village through Giza and the Ozmone Plain to The Needlebrake | 2026-11-18 |
+| The Needlebrake (gol_a02) | The hidden path (森人の道, Space at (271.0, 149.1)): "The path to Eruyt Village is gone. Speak to the Wood" opens it at story 420 | 2026-11-18 |
+| Road of Verdant Praise (vic_a03), The Spiritwood (vic_a02) | Reached through the hidden path | 2026-11-18 |
+| Teleport crystals | Touched and teleported between: Southgate, West Barbican, South Bank Village, Babbling Vale, Banks of the Sogoht, Yensa Border Tunnel, Road of Verdant Praise | 2026-11-17/18 |
+| Zertinan Caverns | Hourglass Basin's boulder ("Space Boulder") changes the quicksand; the caverns lead out through Athroza Quicksands and The Balamka Fault to the Yensa side | 2026-11-18 |
+
+## Blocked: worth a look
+
+| Where | What blocks | Why (from the scripts) |
+| --- | --- | --- |
+| The Needlebrake, exit to Whisperleaf Way (Golmore Jungle) | The blue seal | `HED_DIREC` opens it only with key item **Lente's Tear** (0x80B7); `rewards.csv` places Lente's Tear in Eruyt Village. Not on the gate list, and it shouldn't be: the item is the key. |
+| Eruyt Village, The Spiritwood: gate to vic_a04 | A shut gate (screenshot kept by the bot) | Not found yet. No Eruyt (`vic_`) rows in `opengates.csv`; the exit actors have no story check. Candidates: the gate-guard actors `配置替え_門守_RECT_A/B`. If Lente's Tear is behind this gate, Golmore Jungle is closed from both sides at story 420. |
+| Haulo Green and Field of Light Winds, exits to The Shred | Grass and rock where the exits are; the exits lie off the maps' walk meshes | No story check in either map's script. The Shred itself is reachable through The Greensnake. |
+| The Shred, exit to North Entrance (Henne Mines) | Not reachable from where the party stood | `ヘネ通行制限` (story < 1790) is on the gate list (rows 33-34), so it should be open; the bot couldn't reach it (the map's floor is split). Not confirmed either way. |
+
+## Not tested: the bot can't route there yet
+
+Most failed legs of the crystal sweep were the bot's own limits, not the game: airship flights (aerodrome menus), Barheim
+Passage's inner links, Ridorana, Archades, the Feywood. The exit reader finds 1127 of the game's 1776 map links
+(`prefetchdata/ff12mapjump_custom_nocrystal.csv`).
+
+## Leads
+
+- `ps2data/image/ff12/us/bin/mapjumpgroupflagrom.bin` (FLAGROM1): 152 groups of story ranges (u16 lo, u16 hi | 0x8000;
+  `..hi` from 0; FFFF ends). Exit groups switch on by story range here, outside the map scripts the open-world patch
+  edits. How script flag ids (`setmapjumpgroupflag` 0x430 and up to 16426) map to these groups isn't decoded.
+- Interaction spots (doors, switches, the hidden path) are in the script header's 0x74 table; the flee key hides their
+  Space prompts.

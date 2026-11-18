@@ -446,7 +446,7 @@ switch (args[0])
                 { Thread.Sleep(250); var np = Pos(); still = Math.Abs(np.x - lastP.x) + Math.Abs(np.z - lastP.z) < 0.01 ? still + 1 : 0; lastP = np; }
             }
             var visited = new List<(int id, string name)>();
-            int retries = 0;
+            int retries = 0; var unusable = new HashSet<(int map, int trigger)>();
             for (int hop = 0; hop <= maxMaps; hop++)
             {
                 int mapId = MapNow();
@@ -488,7 +488,7 @@ switch (args[0])
                     if (m == goalMap) break;
                     var (_, _, _, cost, at) = prev[m];
                     if (Ff12MapData.ScriptInfo.For(NameOf0(m)) is not { } si) continue;
-                    foreach (var x in si.Exits)
+                    foreach (var x in si.Exits.Where(x => !unusable.Contains((m, x.TriggerId))))
                         foreach (var (dest, ent) in x.Leads)
                             Relax(dest, (m, x, -1, cost + Span(at, (x.Mid.X, x.Mid.Z)) * Winding / RunSpeed + MapChangeSeconds, EntranceOf(dest, ent)));
                     if (teleports && Ff12MapData.Crystals.On(m) is { } crystalHere)
@@ -546,12 +546,19 @@ switch (args[0])
                 while (!ex.Interact && MapNow() == mapId && push.Elapsed.TotalSeconds < 8) { var (qx, _, qz) = Pos(); Steer(qx + dx * 6, qz + dz * 6, 300); Thread.Sleep(50); }
                 var waitSw = System.Diagnostics.Stopwatch.StartNew();
                 while (waitSw.Elapsed.TotalSeconds < 30 && MapNow() == mapId) Thread.Sleep(500);
-                if (MapNow() == mapId && ++retries <= 6)
+                if (MapNow() == mapId && ++retries <= 2)
                 {
                     // most often a battle holds the party (Immobilize, Stop, a crowd of enemies): wait a little and
                     // plan this map again from where the party stands
-                    Console.WriteLine($"    the exit didn't lead out ({res.Trim()}); waiting 5 s and trying again ({retries}/6)");
+                    Console.WriteLine($"    the exit didn't lead out ({res.Trim()}); waiting 5 s and trying again ({retries}/2)");
                     Thread.Sleep(5000); visited.RemoveAt(visited.Count - 1); hop--; continue;
+                }
+                if (MapNow() == mapId && unusable.Add((mapId, ex.TriggerId)))
+                {
+                    // still here: this exit can't be used now (a closed road, or floor the map data doesn't connect).
+                    // Plan around it for the rest of the trip.
+                    Console.WriteLine($"    GAVE UP on the exit at ({ex.Mid.X:F1}, {ex.Mid.Z:F1}) to 0x{nextMap:X} ({NameOf(nextMap)}): {res.Trim()}; planning another way");
+                    retries = 0; visited.RemoveAt(visited.Count - 1); hop--; continue;
                 }
                 if (MapNow() == mapId) { Console.WriteLine($"trip ended: the exit at ({ex.Mid.X:F1}, {ex.Mid.Z:F1}) did not lead out ({res})"); LiveState.Trip(visited, visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, "stopped: the exit did not lead out"); return 1; }
                 Console.WriteLine($"    map changed to 0x{MapNow():X}"); retries = 0;

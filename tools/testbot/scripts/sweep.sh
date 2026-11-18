@@ -17,7 +17,9 @@ while read -r item map place; do
   if [ -n "$want" ]; then echo " $want " | grep -qi " $item " || continue; fi
   touched | grep -qx "$item" && { echo "SKIP $item $place (touched)"; continue; }
   echo "== leg to $place (0x$map, crystal 0x$item) $(date +%H:%M:%S)"
-  out=$($M trip "$map" 2>&1 | tee /dev/stderr | tail -1)
+  $M trip "$map" 2>&1 | tee work/bot/leg.txt; out=$(tail -1 work/bot/leg.txt)
+  # exits the trip had to give up on (a closed road, or floor the map data doesn't connect): worth a look
+  grep -a "GAVE UP" work/bot/leg.txt | sed "s/^ */  on the way to $place: /" | tee -a $LOG
   if [ "$($M get u16 exe+20441F0)" != "$((16#$map))" ]; then
     echo "LEG $item 0x$map $place: FAILED ($out)" | tee -a $LOG; continue
   fi

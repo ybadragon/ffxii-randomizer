@@ -185,6 +185,7 @@ sealed class TexMap
             gr.FillEllipse(Brushes.Orange, (float)(at.u - x0 - 5), (float)(at.v - y0 - 5), 10, 10);
             gr.FillEllipse(Brushes.Red, next.x - x0 - 4, next.y - y0 - 4, 8, 8);
         }
-        img.Save(file);
+        // a debug picture only: another process (the viewer) may hold the file, so a failed save is skipped, not fatal
+        try { img.Save(file); } catch (Exception e) when (e is System.Runtime.InteropServices.ExternalException or IOException) { }
     }
 }

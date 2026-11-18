@@ -481,6 +481,9 @@ switch (args[0])
             }
             var visited = new List<(int id, string name)>();
             int retries = 0; var unusable = new HashSet<(int map, int trigger)>();
+            // where an exit really led this trip: some exits lead to different maps at different story points (Southgate's
+            // road east goes to Throne Road 0xEC or 0xFD); once one is taken, plan with the map it led to
+            var ledTo = new Dictionary<(int map, int trigger), int>(); (int map, int trigger)? lastExit = null;
             for (int hop = 0; hop <= maxMaps; hop++)
             {
                 // Heartbeat: whoever supervises the run touches work/bot/heartbeat; when it is older than 20 minutes the
@@ -496,6 +499,8 @@ switch (args[0])
                 var (px, _, pz) = Pos();
                 string name = NameOf(mapId);
                 visited.Add((mapId, name));
+                if (lastExit is { } le && le.map != mapId) ledTo[le] = mapId;
+                lastExit = null;
                 Console.WriteLine($"[{hop}] map 0x{mapId:X} ({name}) at ({px:F1}, {pz:F1})");
                 if (mapId == goalMap)
                 {
@@ -569,7 +574,8 @@ switch (args[0])
                     {
                         double walk = cost + Span(at, (x.Mid.X, x.Mid.Z)) * Winding / RunSpeed + MapChangeSeconds + (mi is null || mi.CanWalkTo(new(at.x, at.z), x) ? 0 : CutOff);
                         foreach (var (dest, ent) in x.Leads)
-                            Relax((dest, ent), (node, x, -1, walk, EntranceOf(dest, ent)));
+                            if (!ledTo.TryGetValue((m, x.TriggerId), out int led) || led == dest)
+                                Relax((dest, ent), (node, x, -1, walk, EntranceOf(dest, ent)));
                     }
                     if (teleports && Ff12MapData.Crystals.On(m) is { } crystalHere)
                     {
@@ -608,6 +614,7 @@ switch (args[0])
                 LiveState.Trip([.. visited, .. rest], visited.Count - 1, nextMap, (ex.Mid.X, ex.Mid.Z), goalLabel, $"heading for the exit to {NameOf(nextMap)}");
                 // read the next map (package match, minimap pictures) while walking this one, so the change doesn't wait on it
                 var prefetch = Task.Run(() => { if (Ff12MapData.MapInfo.For(nextMap)?.Package is { } np) for (int v = 0; v < np.VariantCount; v++) np.Minimap(v); });
+                lastExit = (mapId, ex.TriggerId);
                 var res = Walk(ex.Mid.X - dx * (ex.Interact ? 1.2 : 2.5), ex.Mid.Z - dz * (ex.Interact ? 1.2 : 2.5));
                 var push = System.Diagnostics.Stopwatch.StartNew();
                 if (ex.Interact)

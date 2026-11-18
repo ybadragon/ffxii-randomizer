@@ -49,6 +49,14 @@ void GodTick(Dictionary<int, uint> last, Action<string> report)
         uint max = BitConverter.ToUInt32(b, 0), cur = BitConverter.ToUInt32(b, 0x24), status = BitConverter.ToUInt32(b, 0x40);
         if (max == 0 || max > 99999 || cur > max) continue;
         if (cur == 0 && last.TryGetValue(i, out var was) && was > 0) report($"DEATH: character {i} fell (max HP {max})");
+        // KO (status bit 0) with 0 HP: bring them back (clear KO, full HP; checked in game: the menu shows them alive)
+        if (cur == 0 && (status & 1) != 0 && last.ContainsKey(i))
+        {
+            Native.WriteProcessMemory(h, (IntPtr)(a + 0x40), BitConverter.GetBytes(status & ~1u), (IntPtr)4, out _);
+            Native.WriteProcessMemory(h, (IntPtr)(a + 0x24), BitConverter.GetBytes(max), (IntPtr)4, out _);
+            report($"REVIVED: character {i}");
+            cur = max;
+        }
         if (cur > 0 && cur < max) Native.WriteProcessMemory(h, (IntPtr)(a + 0x24), BitConverter.GetBytes(max), (IntPtr)4, out _);
         // status bits at +0x40 (Immobilize = 0x4000, seen: set while immobilized, clear once free). Clears the ailments
         // in FFXII's status order after KO (bit 0, left alone): Stone, Petrify, Stop, Sleep, Confuse, Doom, Blind, Poison,

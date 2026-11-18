@@ -64,11 +64,29 @@ public static class Crystals
             {
                 var (map, ent) = jumps[k];
                 var at = ScriptInfo.For(GameFiles.ScriptName(map) ?? "") is { } info && ent < info.Entrances.Count ? info.Entrances[ent] : default;
-                list.Add(new Crystal(ordered[k].value, map, ent, at.X, at.Z, at.X - Math.Sin(at.Facing) * 4, at.Z - Math.Cos(at.Facing) * 4));
+                // the crystal stands where its actor puts itself (setposbynaviicon): the single point of the map's
+                // trigger-line list 2 (checked on six crystal maps; the Yensa Border Tunnel's is 7 units from its landing
+                // spot). Without one, about 4 units from the landing spot against the landing direction.
+                var (cx, cz) = CrystalSpot(GameFiles.ScriptName(map)) ?? (at.X - Math.Sin(at.Facing) * 4, at.Z - Math.Cos(at.Facing) * 4);
+                list.Add(new Crystal(ordered[k].value, map, ent, at.X, at.Z, cx, cz));
             }
             if (list.Count > 0) return list;
         }
         return [];
+    }
+
+    // list 2 of the script's trigger-line lists (base+0x70): one point (x, y, z, facing) and an empty second point
+    static (double X, double Z)? CrystalSpot(string? name)
+    {
+        if (name is null || ScriptBytes(name) is not { } b) return null;
+        int I(int o) => BitConverter.ToInt32(b, o);
+        float F(int o) => BitConverter.ToSingle(b, o);
+        int bs = I(0x10), tl = bs + I(bs + 0x70);
+        if (tl + 16 > b.Length || I(tl) < 3) return null;
+        int o = bs + I(tl + 4 + 2 * 4);
+        if (o + 0x30 > b.Length || I(o) != 1) return null;
+        int sg = o + 0x10;
+        return F(sg + 16) == 0 && F(sg + 24) == 0 && (F(sg) != 0 || F(sg + 8) != 0) ? (F(sg), F(sg + 8)) : null;
     }
 
     static byte[]? ScriptBytes(string name) => name.Length < 5 ? null : GameFiles.Get($"ps2data/plan_master/us/plan_map/{name[..5]}/{name}/global/{name}.ebp");

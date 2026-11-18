@@ -652,9 +652,15 @@ switch (args[0])
                             Console.WriteLine($"    using the switch at ({spot.X:F1}, {spot.Z:F1}) with Space");
                             Input.Focus(p.MainWindowHandle);
                             for (int s = 0; s < 40; s++) { var (qx, _, qz) = Pos(); if (Math.Abs(qx - spot.X) + Math.Abs(qz - spot.Z) < 1.0) break; Steer(spot.X, spot.Z, 150); }
-                            Input.ReleaseAll(); Thread.Sleep(300);
-                            Input.Hold([' '], 120); Thread.Sleep(1200);
+                            // the flee key hides the prompt, so everything is let go; the switch may ask first ("The path to
+                            // Eruyt Village is gone." Speak to the Wood / Do nothing, the first choice selected): a second
+                            // Space confirms it. With no question, that Space opens the battle menu, which C closes.
+                            var always = Input.Always; Input.Always = []; Input.ReleaseAll(); Thread.Sleep(300);
+                            Input.Hold([' '], 120); Thread.Sleep(1500);
+                            Input.Hold([' '], 120); Thread.Sleep(1500);
                             if (Read(exe + 0x203F238, 1)[0] == 1) { Input.Hold([' '], 120); Thread.Sleep(1200); }
+                            Input.Hold(['C'], 100); Thread.Sleep(300);
+                            Input.Always = always;
                             Thread.Sleep(8000); // the scene that shows the change
                         }
                     }

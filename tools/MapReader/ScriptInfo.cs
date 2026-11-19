@@ -89,7 +89,7 @@ public sealed class ScriptInfo
             var variants = new SortedSet<int>();
             for (int i = 3; i < ins.Count; i++)
             {
-                if (trig >= 0 && ins[i].Op == CallPopA && ins[i].Operand == MapJump && ins[i - 1].Op == PushII && ins[i - 2].Op == PushII && ins[i - 3].Op == PushII && ins[i - 1].Operand == 0)
+                if (trig >= 0 && ins[i].Op == CallPopA && ins[i].Operand == MapJump && ins[i - 1].Op == PushII && ins[i - 2].Op == PushII && ins[i - 3].Op == PushII && (ins[i - 1].Operand == 0 || interact.Contains(trig) && ins[i - 1].Operand == 1))
                 {
                     if (!leads.TryGetValue(trig, out var l)) leads[trig] = l = [];
                     if (!l.Contains((ins[i - 3].Operand, ins[i - 2].Operand))) l.Add((ins[i - 3].Operand, ins[i - 2].Operand));
@@ -141,6 +141,14 @@ public sealed class ScriptInfo
         var lonelyLines = lines.Keys.Where(id => !leads.ContainsKey(id)).ToList();
         var lonelyExits = leads.Keys.Where(id => !lines.ContainsKey(id)).ToList();
         if (lonelyLines.Count == 1 && lonelyExits.Count == 1) { lines[lonelyExits[0]] = lines[lonelyLines[0]]; lines.Remove(lonelyLines[0]); }
+        // a door with no trigger line (Lowtown's, "PUSHII k; fieldsign" then a mapjump whose last argument is 1): its Space
+        // spot is interaction spot k, so a short line across that spot stands for it
+        foreach (int id in leads.Keys.Where(id => interact.Contains(id) && !lines.ContainsKey(id)).ToList())
+            if (id - FieldSignLines is int k && k >= 0 && k < spots.Count)
+            {
+                var (sx, _, sz, _, _) = spots[k];
+                lines[id] = [new Segment(new(sx - 0.5, sz), new(sx + 0.5, sz))];
+            }
         Exits = lines.Where(kv => leads.ContainsKey(kv.Key)).Select(kv => new Exit(kv.Key, owner[kv.Key], kv.Value, leads[kv.Key], interact.Contains(kv.Key))).ToList();
         OtherTriggers = lines.Where(kv => !leads.ContainsKey(kv.Key)).SelectMany(kv => kv.Value.Select(s => (kv.Key, owner.GetValueOrDefault(kv.Key), s))).ToList();
 

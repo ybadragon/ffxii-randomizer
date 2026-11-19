@@ -1058,6 +1058,98 @@ switch (args[0])
             }
             break;
         }
+    case "actors":
+    case "talk":
+        {
+            // The field's actors (party, NPCs, monsters, objects) sit in an array of 0x130-byte entries in the game's own
+            // data, each with its position (x, y, z floats) at the same offset; found in the Rabanastre aerodrome, where the
+            // party leader's entry holds the same position as exe+21A7D20. The array is found again each time from the
+            // leader's position.
+            //   actors            lists them by distance from the party
+            //   talk <x> <z>      walks up to the actor nearest (x, z) (a rough spot from a screenshot or a script),
+            //                     faces it from close by and presses Space with the flee key let go
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            const int Stride = 0x130;
+            var leader = Read(exe + 0x21A7D20, 12);
+            long img0 = exe + 0x2900000; var img = Read(img0, 0x300000);
+            // the leader's position shows up in several structures; the actor array is the copy whose neighbours, a stride
+            // apart, are positions near it too
+            float lx = BitConverter.ToSingle(leader, 0), lz = BitConverter.ToSingle(leader, 8);
+            int Neighbours(int o)
+            {
+                int n = 0;
+                for (int k = -40; k <= 40; k++)
+                {
+                    int q = o + k * Stride; if (k == 0 || q < 0 || q + 12 > img.Length) continue;
+                    float x = BitConverter.ToSingle(img, q), z = BitConverter.ToSingle(img, q + 8);
+                    if (float.IsFinite(x) && float.IsFinite(z) && Math.Abs(x) > 2 && Math.Abs(z) > 2 && Math.Abs(x - lx) < 150 && Math.Abs(z - lz) < 150 && Math.Abs(x - lx) + Math.Abs(z - lz) > 0.5 && Math.Abs(BitConverter.ToSingle(img, q + 4) - BitConverter.ToSingle(leader, 4)) < 5) n++;
+                }
+                return n;
+            }
+            int hit = -1, best = 0;
+            for (int o = 0; o + 12 <= img.Length; o += 4)
+                if (Math.Abs(BitConverter.ToSingle(img, o) - lx) < 0.05f && Math.Abs(BitConverter.ToSingle(img, o + 8) - lz) < 0.05f && Neighbours(o) is int nb && nb > best) { hit = o; best = nb; }
+            if (hit < 0) { Console.WriteLine("actor array not found (leader position not seen)"); return 1; }
+            var list = new List<(long a, float x, float y, float z)>();
+            for (int k = -200; k <= 200; k++)
+            {
+                int o = hit + k * Stride; if (o < 0 || o + 12 > img.Length) continue;
+                float x = BitConverter.ToSingle(img, o), y = BitConverter.ToSingle(img, o + 4), z = BitConverter.ToSingle(img, o + 8);
+                if (float.IsFinite(x) && float.IsFinite(y) && float.IsFinite(z) && Math.Abs(x) > 0.01 && Math.Abs(x) < 2000 && Math.Abs(z) < 2000 && Math.Abs(y) < 500 && Math.Abs(z) > 0.01) list.Add((img0 + o, x, y, z));
+            }
+            var (px, py, pz) = Pos();
+            double D(double x, double z, double qx, double qz) => Math.Sqrt((x - qx) * (x - qx) + (z - qz) * (z - qz));
+            if (args[0] == "actors")
+            {
+                foreach (var t in list.OrderBy(t => D(t.x, t.z, px, pz)).Take(40)) Console.WriteLine($"{Name(t.a)} ({t.x:F2}, {t.y:F2}, {t.z:F2}) {D(t.x, t.z, px, pz):F1} away");
+                break;
+            }
+            double gx = double.Parse(args[1], ci), gz = double.Parse(args[2], ci);
+            // not the party: skip entries standing where the leader stands
+            var target = list.Where(t => D(t.x, t.z, px, pz) > 0.3).OrderBy(t => D(t.x, t.z, gx, gz)).FirstOrDefault();
+            if (target.a == 0) { Console.WriteLine("no actor near that spot"); return 1; }
+            Console.WriteLine($"actor at ({target.x:F2}, {target.z:F2}) ({Name(target.a)}), {D(target.x, target.z, gx, gz):F1} from the spot asked");
+            Input.Always = []; Input.Focus(p.MainWindowHandle);
+            for (int tries = 0; tries < 4; tries++)
+            {
+                // re-read: people walk about
+                var now = Read(target.a, 12); float tx = BitConverter.ToSingle(now, 0), tz = BitConverter.ToSingle(now, 8);
+                var (qx, _, qz) = Pos(); double d = D(tx, tz, qx, qz);
+                if (d > 1.0)
+                {
+                    // stop 0.8 short on the line from here, then take a short step at it so the leader faces it
+                    double ux = (tx - qx) / d, uz = (tz - qz) / d;
+                    Console.WriteLine("  " + WalkTo(tx - ux * 0.8, tz - uz * 0.8, 0.3, 10, true).Trim());
+                }
+                Input.ReleaseAll(); Thread.Sleep(150);
+                Steer(tx, tz, 120); Input.ReleaseAll(); Thread.Sleep(250);
+                Input.Hold([' '], 120); Thread.Sleep(900);
+                Console.WriteLine($"  pressed Space facing ({tx:F2}, {tz:F2}) from {D(tx, tz, Pos().x, Pos().z):F2} away");
+                if (args.Length > 3 && args[3] == "once") break;
+                break;
+            }
+            break;
+        }
+    case "near":
+        {
+            // near <x> <z> <radius> [ystep]: every float triple (x, y, z) in writable memory within radius of (x, z) at
+            // about the party's height (|y - party y| < 3): where NPC and object positions live (finding the actor list)
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            double cx = double.Parse(args[1], ci), cz = double.Parse(args[2], ci), r = double.Parse(args[3], ci);
+            var (_, py, _) = Pos();
+            int shown = 0;
+            foreach (var (b, s) in Regions())
+            {
+                var buf = Read(b, (int)s);
+                for (int i = 0; i + 12 <= buf.Length && shown < 400; i += 4)
+                {
+                    float x = BitConverter.ToSingle(buf, i), y = BitConverter.ToSingle(buf, i + 4), z = BitConverter.ToSingle(buf, i + 8);
+                    if (!float.IsFinite(x) || !float.IsFinite(z) || !float.IsFinite(y) || Math.Abs(x) < 0.5 || Math.Abs(z) < 0.5 || Math.Abs(y - py) > 3 || (x - cx) * (x - cx) + (z - cz) * (z - cz) > r * r || x == 0 && z == 0) continue;
+                    Console.WriteLine($"{Name(b + i)} {x:F2} {y:F2} {z:F2}"); shown++;
+                }
+            }
+            break;
+        }
     case "posscan":
         {
             // posscan start|next: finds where the controlled character's position lives. "start" saves every float triple

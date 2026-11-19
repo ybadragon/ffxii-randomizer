@@ -1,6 +1,6 @@
 # Open world: what the test bot found
 
-**Most important for a player (2026-11-18):** (1) walking into Freezing Gorge (Paramina Rift) before the story gets there jumps the story to 1973 (seen in game from 420); the way there runs through Golmore Jungle, so it opens with Lente's Tear (story about 1740, or the open-world rewards), early enough to skip the Henne Mines part of the story; (2) after riding a chocobo to the Henne Mines, a party on foot is stuck in The Shred's south part unless it has greens for the wild chocobo; (3) Golmore Jungle waits for Lente's Tear (story about 1740). Details below.
+**Most important for a player (2026-11-19):** (1) walking into Freezing Gorge (Paramina Rift) before the story gets there jumps the story to 1973 (seen in game from 420); the way there runs through Golmore Jungle, so it opens with Lente's Tear (story about 1740, or the open-world rewards), early enough to skip the Henne Mines part of the story; (2) after riding a chocobo to the Henne Mines, a party on foot is stuck in The Shred's south part unless it has greens for the wild chocobo; (3) Golmore Jungle waits for Lente's Tear (story about 1740); (4) only the Nalbina airship flies at story 420, so Bhujerba and the Lhusu Mines (no land route) wait for the story. Everything else the bot tried at story 420 works: walking, doors, crystals, shops, saving, the Nalbina flight. Details below.
 
 Test setup: `install 1 exp_freeroam exp_flag=01A4 exp_map=81 exp_entry=0 exp_level=99 exp_weak=dst exp_give=2000:99 openworld`
 (story flag 420, start at South Bank Village, level 99, 99 Teleport Stones, open world on). The bot walked with god
@@ -13,7 +13,7 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Rabanastre, Giza Plains, Ozmone Plain | Walking from South Bank Village through Giza and the Ozmone Plain to The Needlebrake | 2026-11-18 |
 | The Needlebrake (gol_a02) | The hidden path (森人の道, Space at (271.0, 149.1)): "The path to Eruyt Village is gone. Speak to the Wood" opens it at story 420 | 2026-11-18 |
 | Road of Verdant Praise (vic_a03), The Spiritwood (vic_a02) | Reached through the hidden path | 2026-11-18 |
-| Teleport crystals | Touched and teleported between: Southgate, West Barbican, South Bank Village, Babbling Vale, Banks of the Sogoht, Yensa Border Tunnel, Road of Verdant Praise, The Parting Glade | 2026-11-17/18 |
+| Teleport crystals | Touched and teleported between (every crystal reachable on foot at story 420): Southgate, West Barbican, South Bank Village, Hunters' Camp, Banks of the Sogoht, Road of Verdant Praise, The Parting Glade, Quietened Trace (Feywood), Valley of the Dead, Walk of Mind, Sea Breeze Lane, The Western Divide, Babbling Vale, Yensa Border Tunnel. The others wait for an airship route or a story door (below) | 2026-11-17/19 |
 | Golmore Jungle | With Lente's Tear (given by the bot), through the seal to Whisperleaf Way and The Parting Glade | 2026-11-18 |
 | Zertinan Caverns | Hourglass Basin's boulder ("Space Boulder") changes the quicksand; the caverns lead out through Athroza Quicksands and The Balamka Fault to the Yensa side | 2026-11-18 |
 | Valley of the Dead (rwg_a01) | Reached on foot from South Bank Village by the crystal sweep (through the Ogir-Yensa and Nam-Yensa sandseas), crystal touched at story 420 | 2026-11-18 |
@@ -54,9 +54,18 @@ Key items that also wait for the story (an actor checks the item *and* `story >=
 
 ## Not tested: the bot can't route there yet
 
-Most failed legs of the crystal sweep were the bot's own limits, not the game: airship flights (they work: see Works. The planner doesn't know them, because the counter talk `乗船カウンタートーク` runs from a clerk, not a trigger line; `mapdata jumps <map>` lists its mapjumps: Rabanastre flies to Bhujerba, Nalbina, Archades and the Sky Saloon; Nalbina to Rabanastre, Archades and Balfonheim; Bhujerba to Rabanastre and Balfonheim), Barheim
-Passage's inner links, Ridorana, Archades, the Feywood (from Golmore through gol_c01 and gol_d01). The exit reader finds 1185 of the game's 1776 map links
-(`prefetchdata/ff12mapjump_custom_nocrystal.csv`).
+Failed legs of the crystal sweep that were the bot's own limits, not the game:
+
+- Airship flights: they work (see Works), but the planner doesn't know them, because the desk talk
+  `乗船カウンタートーク` runs from a clerk, not a trigger line. `mapdata jumps <map>` lists its mapjumps: Rabanastre
+  flies to Bhujerba, Nalbina, Archades and the Sky Saloon; Nalbina to Rabanastre, Archades and Balfonheim; Bhujerba
+  to Rabanastre and Balfonheim. Exits that run from talking (Nalbina's aerodrome guard) are the same.
+- The Garamsythe Waterway: whether a channel is flooded depends on the sluice gates, which the bot doesn't work. Its
+  route to the Terminus crystals went into the water at No. 11 Channel and looped; the party walked back out to
+  Central Waterway Control. Sweeps now avoid maps 346 and 352.
+- Barheim Passage's inner links, Ridorana, Archades (by airship only).
+
+The exit reader finds 1282 of the game's 1776 map links (`prefetchdata/ff12mapjump_custom_nocrystal.csv`).
 
 ## Leads
 
@@ -77,5 +86,7 @@ Passage's inner links, Ridorana, Archades, the Feywood (from Golmore through gol
 ## Key items for testing
 
 `memtool keyitem <hex id> [off]` gives or takes a key item. Key items are bits: bit (id - 0x8000) from savemem
-`exe+204B3C0`, with five more copies the game keeps in step (all are written). With Lente's Tear (80B7) given, The
-Needlebrake's Golmore seal opened on the next map change and the party reached Whisperleaf Way (2026-11-18).
+`exe+204B3C0`, with copies the game keeps in step; the tool writes each copy whose whole 32 bytes match (see
+[game internals](game-internals.md)). With Lente's Tear (80B7) given, The Needlebrake's Golmore seal opened on the
+next map change and the party reached Whisperleaf Way (2026-11-18). Giving loot (Gysahl Greens for The Shred's
+chocobo) isn't solved: the loot counts are found, the inventory order list isn't.

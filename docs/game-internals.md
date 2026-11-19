@@ -10,19 +10,19 @@ features", "VBF format notes").
 
 | Address | Type | What |
 | --- | --- | --- |
-| `exe+2044480` | u16 | Story flag (シナリオフラグ, savemem variable 0). Savemem variable N is at `exe+2044480+N`. |
+| `exe+2044480` | u16 | Story flag (シナリオフラグ, savemem variable 0). Savemem starts here: script `savemem` variable N is at `exe+2044480+N`. |
 | `exe+20441F0` | u16 | Current map id (`app/Ff12Randomizer.Core/Data/mapAreas.csv` maps id to script name) |
+| `exe+2044288` | u32 | Gil |
 | `exe+21A7D20` | 3 x f32 | Position (x, y, z) of the character you control. Works in field maps and town-style maps. |
-| `exe+2A2E750` | 3 x f32 | A party position that stops updating in town-style maps (seen in the Estersand Outpost). Don't use it. |
 | `exe+1E5E528` | f32 | Camera: c = f32 at +0, s = f32 at +0x20. W moves the party along world (s, c), D along (-c, s). |
 | `exe+203F22C` | u8 | Cursor of the open dialog menu (0 = first option); also mirrored at `exe+1F7C684`. Confirmed on the crystal menu and its destination list. |
-| `exe+203F238` | u8 | 1 while a dialog menu is open (used by `memtool teleport`; `exe+203F1A2`, `203F1AC`, `203F1B0` behave the same). Same on two crystals. |
-| `exe+2092938` | u32 | Character records, 0x1C8 apart (Vaan, Ashe, Fran, Balthier, Basch, ...): max HP here, **current HP at +0x24**. Writing the current HP changes it in game (checked); `exe+1F7B088` (+0xC4 per battle slot) and `exe+21A80A0` (+0xC0) are copies refreshed from it. |
-| `exe+2044480` | | Start of savemem (script `savemem` variables are offsets from here; the story flag is savemem 0). |
-| `exe+2045072` | 31 x u16 | Teleport destination lines, `g_menu_telepo_dest` (savemem 0x0BF2): the key item of each touched crystal, in touch order (see Teleporting). |
+| `exe+203F238` | u8 | 1 while a dialog menu is open (used by `memtool teleport`; `exe+203F1A2`, `203F1AC`, `203F1B0` behave the same). Also during yes/no questions (switches, the hidden path). |
 | `exe+203F228` | u8 | Index of the open menu's last line (lines = value + 1). |
-| `exe+203F1B3`, `exe+203F228` | u8 | Candidates for the option count (3) and last option index (2); not yet told apart. |
-| `exe+1F7B088`, `exe+21A80A0` | | HP copies, 0xC0 bytes per member (current, then max). These are display copies: writing to them changes nothing. |
+| `exe+2092938` | u32 | Character records, 0x1C8 apart (Vaan, Ashe, Fran, Balthier, Basch, ...): max HP here, **current HP at +0x24**. Writing the current HP changes it in game (checked); `exe+1F7B088` (+0xC4 per battle slot) and `exe+21A80A0` (+0xC0) are display copies refreshed from it (writing them changes nothing). |
+| `exe+2045072` | 31 x u16 | Teleport destination lines, `g_menu_telepo_dest` (savemem 0x0BF2): the key item of each touched crystal, in touch order (see Teleporting). |
+| `exe+204B3C0` | bits | Key items: bit (id - 0x8000). The game keeps up to five more copies; match a copy by its whole 32 bytes, not a few bits (a loose match wrote 34 wrong places once). After a reload only two copies are in use. `memtool keyitem`. |
+| `exe+204AF90` | u16 per item | Loot counts by item id, with copies 0x430 apart before the key-item copies. Writing a count isn't enough to give loot: the inventory's order list (near `exe+2050836`) isn't decoded. |
+| about `exe+2A2E4F0` on | 0x130 each | The field's actors (party, people, monsters): position (x, y, z) at a fixed offset. Entries move between map loads; `memtool actors` finds the array by the controlled character's position. One entry (`exe+2A2E750`) stops updating in town-style maps: use `exe+21A7D20` for the party. |
 
 World axes: +x is east, -z is north, y is up. Neighbouring maps share world coordinates.
 
@@ -67,13 +67,23 @@ Map script data, at offsets relative to the script base (u32 at file offset 0x10
   reader finds them from the other side: the map the exit leads to has an exit back here, to entrance e, and this
   exit is the free segment (or, for a door, the Space spot) nearest entrance e.
 - **Where NPCs stand**: the generic NPCs (`NPC01`...) share one routine and take their spot from the script's float
-  constants (header 0x24: u32 count, then f32 values) as x, z, facing, chosen by the NPC's number. `mapdata npcs <map>`
-  lists them. In memory, the field's actors are an array of 0x130-byte entries with the position at a fixed offset
-  (`memtool actors`, `memtool talk <x> <z>`).
+  constants (header 0x24: u32 count, then f32 values; `op50 k` pushes constant k) as x, z, facing, chosen by the NPC's
+  number. Each NPC's block often starts with a story check (`story >= N` or it returns), so who stands where changes
+  with the story. `mapdata npcs <map>` lists likely spots, `mapdata floats <map>` the raw constants. In memory, the
+  field's actors are an array of 0x130-byte entries with the position at a fixed offset (`memtool actors`, `memtool
+  talk <x> <z>`).
+- **Exits that run from talking**: airship desks (`乗船カウンタートーク`, a mapjump with mode 1 after the ticket is
+  paid) and escorts (Nalbina's aerodrome guard `マップ帝国君移植版` asks "Headed into town?" and mapjumps to the West
+  Ward). They have no trigger line, so the exit reader and the bot's planner don't see them; `mapdata jumps <map>`
+  lists every mapjump in a script by actor.
+- **Airship desks**: in Rabanastre's aerodrome (rbn_b01) four clerks each stand only from a story point: Nalbina from
+  350 at (30.13, 97.63), the others from 670, 4000 and 5150. An empty desk means that route isn't flying yet. A ticket
+  is 200 gil; the private cabin flies straight to the other aerodrome (seen), the leisure craft's mapjump goes to the Sky Saloon
+  (not tried).
 
 `tools/MapReader` (`ScriptInfo`) reads all of this. Against the game's own link table
 (`prefetchdata/ff12mapjump_custom_nocrystal.csv`, 1776 map-to-map links), it finds 1282 (2026-11-18). The rest are
-mostly airship flights (aerodrome menus), shop interiors, puzzle doors and other story versions of a map.
+mostly airship flights and escorts (above), shop interiors, puzzle doors and other story versions of a map.
 
 Scripts also hold a `FF12POS3` table (positions with sizes, such as spawn areas) and `FF12AR03` (not decoded).
 
@@ -94,7 +104,8 @@ covered by both `dst0102` and `dst0107`). The right package is the one whose wal
   - vertices: f32 x, z
   - triangles: u16 a, b, c, group
   - edges: u16 a, b, condition, kind. Condition 0x00FF on ordinary edges; otherwise the high byte is a condition
-    number (0 to 31) and the crossing is conditional. Kind 0x2F joins two cells, 0x08 is a wall. Conditional
+    number (0 to 31) and the crossing is conditional. Kind 0x2F joins two cells, 0x08 is a wall, also between two triangles that touch (a cliff:
+    The Shred's mesh is two pieces this way; `mapdata reach` lists exits on other pieces). Conditional
     crossings sit at exits, gates and barriers: Golmore's seal is condition 1. Which script call opens which condition
     number is not known yet.
   - group vertex lists
@@ -109,8 +120,10 @@ cliff.
 
 ## Teleporting
 
-Crystal menu (checked 2026-11-17): walk up until "Space <name> Crystal" shows (about 4 units from the crystal's landing
-spot, straight ahead in the landing direction), Space: Save / Teleport / Done (cursor on Save); S, Space: "Select a
+Crystal menu (checked 2026-11-17): walk right up to the crystal. Space only opens its menu from about half a unit
+from the spot `memtool teleport` walks to; from one unit away it opened the battle menu instead. Right after arriving
+on a map a crystal can ignore Space for a while (seen at Walk of Mind and The Western Divide; trying again 15 s later
+worked). Space: Save / Teleport / Done (cursor on Save); S, Space: "Select a
 destination", one line per touched crystal (see below), then Cancel; pick, Space. One
 Teleport Stone per teleport (`exp_give=2000:99` gives 99). The crystal stands about 4 units from its
 landing spot in direction (-sin f, -cos f), f = the landing entrance's facing (you land facing away from it).
@@ -151,10 +164,12 @@ Story barriers (seals, gates) are not in the minimap picture or the walk mesh. M
 | `showmapmodel` / `hidemapmodel`, `bgeffectplay` / `bgeffectstop` | The visible barrier (model, glow) |
 | `fieldsign`, `reqenable` / `reqdisable`, `askpos` | Make an actor interactable: walk up, Space, answer a yes/no question |
 
-Worked example, Golmore's glowing seal (`gol_a02`, around (175, 209)): actor `森人の道` checks story >= 1700 (open
-world lowers that) and then makes the seal interactable. Answering yes runs actor `隠し通路`: floor pieces 0, 1, 2, 3
-and 7 on, seal model 17 hidden, model 15 shown, glow effects 41 and 42 stopped, `setnavimapindex 1`. So the seal is a
-door to use, not a missing road. The map's `FF12POS3` entry 7 is at the seal's spot.
+Worked example, the hidden path to Eruyt Village in The Needlebrake (`gol_a02`, Space spot at (271.0, 149.1)): actor
+`森人の道` checks story >= 1700 (open world lowers that) and then makes the glowing barrier interactable ("The path to
+Eruyt Village is gone. Speak to the Wood"). Answering yes runs actor `隠し通路`: floor pieces 0, 1, 2, 3 and 7 on,
+barrier model 17 hidden, model 15 shown, glow effects 41 and 42 stopped, `setnavimapindex 1`. So it is a door to use,
+not a missing road (seen in game at story 420). The map's `FF12POS3` entry 7 is at its spot. The other seal on this
+map, the way into Golmore Jungle (`HED_DIREC`), opens only with the key item Lente's Tear.
 
 The first argument of the floor and wall calls is not a layer: monster scripts call them too (over 170,000 calls),
 probably to limit where each character may walk. Where the numbered pieces are stored is not decoded yet.

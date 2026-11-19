@@ -15,7 +15,7 @@ save" means load any save after relaunching the game.
 | License boards / Espers / Quickenings | new game | After the prologue, the board layout matches `licenses`. |
 | Starting equipment | new game | Party members join wearing the gear listed under `startingInventory` (empty slots are expected), and the gear listed under its items is in the inventory. With "Give the licenses for it", nothing goes to the inventory and the licenses under `licensesGiven` show as learned on the board once a job is picked. Items only change with "Starting items too". |
 | Party stats | new game | Status screen of the first party members. |
-| Open world | new game | New game, play to the first free roam. Check that Rabanastre exits aren't story-locked and that a key item reward appears where `openWorldRewards` says. Note any crash with the map name. |
+| Open world | new game | New game, play to the first free roam. Check that Rabanastre exits aren't story-locked and that a key item reward appears where `openWorldRewards` says. Note any crash with the map name. Keep out of Freezing Gorge (Paramina Rift) before its story point, and don't leave a chocobo at the Henne Mines without Gysahl Greens ([open-world findings](open-world-findings.md)). |
 | Skip the prologue | new game | New Game goes straight to Vaan in the Garamsythe Waterway (no opening movie, no Reks). Vaan should be alone in the party with his usual starting gear, and the rat fight and the walk up to Rabanastre should play normally. |
 
 Afterwards, put your own seed back: the app's History, or `reinstall 162895018` from the CLI.

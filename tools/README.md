@@ -37,6 +37,11 @@ Nothing is copied into the repo as tables. The formats are described in the code
 - `floats <map> [from] [count]`: the script's float constants (`op50 k` pushes constant k: NPC spots, desks).
 - `jumps <map>`: every mapjump in the script by actor, with its map, entrance and mode, including those the exit
   reader skips (airship counters, scenes, crystals).
+- `npcs <map>`: where the map's generic NPCs stand (float-constant triples x, z, facing on the walk mesh).
+- `crystals`: every teleport crystal with its key item, map and landing entrance.
+- `reach <map>|all`: exits that can't be walked to from each entrance (separate pieces of floor).
+- `skips [min]`: scripts that move the story forward on arrival with no lower bound (open-world risks).
+- `packages <map>`: the map packages whose walk mesh could be this map's.
 - `scan`: every map with barriers or variant changes. Slow the first time, since it reads every map.
 
 ## testbot: walk the game by itself
@@ -55,9 +60,22 @@ presses keys. Main commands:
 - `memtool trip <goalMapHex> [x z]`: walks across maps. It takes the quickest route (estimated time: distances from the map data at running speed, plus map changes and teleports) over the game's own exits and teleports,
   walks to each exit's trigger line and crosses it. In the goal map it walks to (x, z).
   Example: `trip 81 182.7 294.8` goes from Rabanastre's Eastgate to South Bank Village's save crystal.
+  It remembers, for this trip only, where each exit really led and where the party arrived, adds 15 minutes to exits
+  on another piece of floor than the arrival, and falls back to `meshnav` when a walk fails. It runs god mode and holds
+  the flee key. Switches: `FF12_BOT_AVOID=1D1,346` (hex map ids never routed through: Freezing Gorge moves the story,
+  the Garamsythe channels need sluice gates), `FF12_BOT_TELEPORT=0`, `FF12_BOT_GOD=0`, `FF12_BOT_FLEE=0`.
+  It doesn't know airship flights or exits that run from talking to someone (Nalbina's aerodrome guard).
 - `memtool teleport <map or key item, hex>`: walks to this map's crystal, opens its menu and picks the destination by
   reading the menu cursor and the game's destination lines (`exe+2045072`) from memory. `trip` routes through teleports too (from a map
   with a crystal to any touched crystal; `FF12_BOT_TELEPORT=0` turns that off). Needs Teleport Stones.
+  `teleport touch` only touches this map's crystal (Save / Teleport / Done, picks Done), so later teleports can go to it.
+- `memtool meshnav <x> <z>`: walks over the walk mesh (A* over triangles) instead of the minimap picture, for cliffs and
+  ledges the picture doesn't show.
+- `memtool actors`: the field's actors (people, monsters, the party) by distance; `talk <x> <z>` walks up to the actor
+  nearest that spot, faces it and presses Space (spots from `mapdata npcs` or `floats`). `near <x> <z> <r>` lists every
+  float triple in writable memory within r of (x, z), for finding where the game keeps something.
+- `memtool god`: keeps every living party member at full HP (prints `DEATH` if one falls anyway). `keyitem <hex>
+  [off]` gives or takes a key item.
 - `memtool vscan start|eq n|ne n|changed|same|up|down|list`: a value-diff scanner over the game's data, for finding
   new memory values (do something in the game between steps).
 - `memtool viz`: a live window for recording next to the game (picture in picture). It shows the current map's
@@ -71,9 +89,14 @@ Scripts in `testbot/scripts`:
 - `step.sh [key/ms]`: presses one key or chord, then takes a screenshot (`work/bot/game/step.png`) and prints the
   position.
 - `trial.sh <options>`: installs, launches the game and starts a New Game.
+- `sweep.sh [key items]`: walks to every untouched teleport crystal (or the ones given) and touches it, one `LEG` line
+  per crystal in `work/bot/sweep.log`. Stops when `work/bot/heartbeat` is older than 20 minutes. Start it with its pid
+  saved (`... & echo $! > work/bot/sweep.pid`): stopping the background shell leaves it running.
+- `game.ps1 -Keep -Steps key:w,...`: taps keys in the game window. Without `-Keep` it closes the game afterwards.
 - `winshot.ps1 -Out <png>`: screenshot of the viewer window, to check how it looks.
 
-Run long walks in the background, and watch their output for "blocked", "stuck", "why:" and "trip ended".
+Run long walks in the background, and watch their output for "blocked", "stuck", "why:", "DEATH" and "trip ended"
+([testing in game](../docs/testing-in-game.md) has the full list).
 
 ## dumpinfo
 

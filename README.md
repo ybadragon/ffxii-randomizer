@@ -26,7 +26,7 @@ are never changed.
 
 | Option | Works on existing saves | Confirmed in game |
 | --- | --- | --- |
-| Open world (experimental: roads the story keeps closed are open; scenes and bosses wait for their story point) | new game (roads also open on existing saves) | partly: Rabanastre doors, the Estersand to South Bank Village, Jahara, the Tomb of Raithwall, Eruyt, Archades; needs a full play test |
+| Open world (experimental: roads the story keeps closed are open; scenes and bosses wait for their story point) | new game (roads also open on existing saves) | partly: Rabanastre doors, the Estersand to South Bank Village, Jahara, the Tomb of Raithwall, Eruyt, Archades; at story 420 the test bot walked most of Ivalice (every crystal reachable on foot, Lowtown, Golmore, the Feywood, Balfonheim, the Henne Mines entrance by chocobo, the Nalbina airship). Known risks: Freezing Gorge jumps the story ahead, The Shred can trap a party on foot. See [open-world findings](docs/open-world-findings.md); needs a full play test |
 | Treasure chests (shuffle/randomize, gil amounts) | yes, unopened chests | yes |
 | Shops (shuffle/randomize) | yes | yes |
 | Shop prices (consumables, equipment) | yes | not yet |

@@ -13,6 +13,9 @@ a game relaunch, which matters most for playing with friends. "Data" says how mu
 | --- | --- | --- | --- |
 | Confirm the untested options in game | – | known | Biggest remaining risk. A short checklist per option (what to look at, where) would make tonight's test fast. |
 | Open world key item placement | new game | likely | Bartz24's logic places the key items with a reachability solver. Today we ship his default layout, so every open world seed has the same key items in the same places. Needs his requirement graph (areas, connections, key item rules) ported. One-time chests may need his treasure bank (max 255 respawn ids). |
+| Open world: keep Freezing Gorge for its story point | new game | known | Walking in early jumps the story from 420 to 1973 (`常駐ディレクター` in pbc_a03 has no lower bound). A gate-list row that keeps Paramina Rift closed, or raises that check's lower bound. `mapdata skips` lists 53 more scripts like it, to check before a full play test. |
+| Open world: no soft lock in The Shred | new game | likely | A party that rides a chocobo to the Henne Mines is stuck on foot without Gysahl Greens. Give greens with `openworld`, or open the Henne Mines doors (`ギミック扉`, story < 1830). |
+| Open world: airship routes | new game | known | Only the Nalbina desk is staffed at story 420; Bhujerba (and the Lhusu Mines) has no land route. Lowering the clerks' story checks (670 / 4000 / 5150 in rbn_b01 `NPC01`) would open them, after checking Bhujerba's arrival scenes. |
 | Seed hash shown in game | yes | known | Write a short code (four item names, say) into a menu string in text table 61, so friends can see at a glance that they're on the same seed. |
 
 ## New randomizers that work on existing saves
@@ -50,7 +53,9 @@ a game relaunch, which matters most for playing with friends. "Data" says how mu
 
 ## Suggested next three
 
-1. In-game checklist for tonight's test, then mark the confirmed options in the README and the app badges.
+1. The open world fixes above (Freezing Gorge, The Shred, maybe airships): the bot's tests found nothing else that
+   breaks at story 420. Then confirm the untested options with the [checklist](test-checklist.md) and mark them in
+   the README and the app badges.
 2. Seed hash in game: cheap, and helps directly with playing alongside friends.
 3. Open world key item placement, once the base open world is confirmed playable. It's the largest piece left and
    only worth it on a stable base.

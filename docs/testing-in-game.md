@@ -7,7 +7,8 @@ for each feature is in [test-checklist.md](test-checklist.md).
 
 - Run the game windowed at 1280x720, so screenshots and the minimap crop line up. The bot reads the minimap at
   window offset (1260, 30), 280x280.
-- Back up the save folder before automating anything. A New Game autosaves into the first slot.
+- Back up the save folder before automating anything. A New Game autosaves into the first slot. The bot saves only to
+  slots 006 and 007; slots 001-005 are the player's.
 - Controllers need Steam Input turned on for this game.
 - If the game crashes at boot even unmodified, delete the big NVIDIA shader cache
   ([game internals](game-internals.md#crashes-and-hangs)).
@@ -91,7 +92,9 @@ route being followed and the chain of maps.
 **Run walks in the background and watch them.** Start `trip` / `tnav` as a background command, and put a monitor on
 its output (that command's own output file, not "the newest file": a viewer started alongside it
 writes one too) that matches every line you'd act on: `^\[` (each map), `heading`, `best:`, `blocked`, `stuck`, `no route`,
-`did not lead`, `map changed`, `arrived`, `TRIP`, `trip ended`, `timeout`, `Exception`. Never block in the foreground
+`did not lead`, `GAVE UP`, `map changed`, `arrived`, `TRIP`, `trip ended`, `timeout`, `Exception`, `DEATH`. Also
+alert when the output stops changing for a few minutes: a trip can loop quietly (No. 11 Channel did for 20 minutes).
+Monitors should be poll loops that end on their own; don't leave `tail -f` behind. Never block in the foreground
 waiting for it. When it reports `blocked` or `stuck`, take a screenshot before deciding anything.
 
 How it works, and what it has taught us:
@@ -116,7 +119,17 @@ How it works, and what it has taught us:
 - **Space with nothing to talk to opens the battle menu** ("Attack / No Available Targets"), which holds the party
   still; C closes it, but not while the flee key (Ctrl) is held. Stuck walks now do this. Crystals and NPCs answer
   Space only from very close (about half a unit; a crystal from one unit away opened the battle menu), so walk up with
-  `goto` or use `teleport touch` for crystals.
+  `goto` or use `teleport touch` for crystals and `talk <x> <z>` for people.
+- **Talking to people**: `mapdata npcs` / `floats` give where they stand, `memtool actors` where they are now. A clerk
+  behind a desk is talked to from the desk's front: walk there with `tnav` first (the clerk's facing says which side),
+  then `talk`. Conversations can run several pages, and a walk started while one is open goes nowhere: page through
+  with `step.sh space` and look at each screenshot. `step.sh` with no key only takes a screenshot.
+- **Exits the planner doesn't know**: airship flights and escorts run from talking to someone, so `trip` reports "no
+  route" out of an aerodrome. Do those by hand (see [game internals](game-internals.md#map-scripts-ebp)).
+- **Maps to keep trips out of**: `FF12_BOT_AVOID=1D1,346,352`. Freezing Gorge (1D1) moves the story to 1973 on
+  arrival; the Garamsythe channels (346, 352) need sluice gates the bot doesn't work, and a route through them loops.
+- **When a walk on the minimap picture fails** (a cliff the picture doesn't show), `trip` walks over the walk mesh
+  instead (`meshnav`). It reported "arrived over the walk mesh" at Limatra Hills' way to Rava's Pass.
 - **Stopping a sweep**: TaskStop on the background command leaves `sweep.sh` and its `memtool trip` running; the sweep
   is started with its pid saved (`bash tools/testbot/scripts/sweep.sh ... & echo $! > work/bot/sweep.pid`) so it can be killed. Two sweeps at once fight over the keys.
 - **Boot crash**: a "Microsoft Visual C++ Runtime Library / Runtime Error!" at launch is the NVIDIA shader cache at

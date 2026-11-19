@@ -523,6 +523,7 @@ switch (args[0])
                 // crystal the party has touched (the game's destination lines; one Teleport Stone each).
                 // Only the map scripts are read here (entrances, exits, crystal spots), so planning is quick.
                 const double RunSpeed = 6, Winding = 1.3, MapChangeSeconds = 2, TeleportSeconds = 12;
+                var Avoid = (Environment.GetEnvironmentVariable("FF12_BOT_AVOID") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => Convert.ToInt32(s.Trim(), 16)).ToHashSet();
                 bool teleports = Environment.GetEnvironmentVariable("FF12_BOT_TELEPORT") != "0";
                 var touchedSet = TeleportLines().ToHashSet();
                 double Span((double x, double z) a, (double x, double z) b) => Math.Sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z));
@@ -565,6 +566,9 @@ switch (args[0])
                 (int map, int ent)? goalNode = null;
                 void Relax((int map, int ent) to, ((int map, int ent) from, Ff12MapData.Exit? exit, int crystal, double cost, (double x, double z) at) via)
                 {
+                    // maps never to route through (FF12_BOT_AVOID, hex ids): e.g. 1D1, Freezing Gorge, whose scene moves the
+                    // story to 1973 on arrival before its time
+                    if (to.map != goalMap && Avoid.Contains(to.map)) return;
                     if (to.map == goalMap && gx is double fx && gz is double fz) via.cost += Span(via.at, (fx, fz)) * Winding / RunSpeed;
                     if (done.Contains(to) || prev.TryGetValue(to, out var old) && old.cost <= via.cost) return;
                     prev[to] = via; pq.Enqueue(to, via.cost);

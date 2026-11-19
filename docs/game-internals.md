@@ -62,9 +62,18 @@ Map script data, at offsets relative to the script base (u32 at file offset 0x10
   the door leads. Used with Space at the line, not by walking across it (Southgate: `gate_south` fieldsign 0 = line
   0x14 into the city, the downtown door fieldsign 1 = line 0x15).
 
+- **Exits with no line of their own**: doors whose mapjump ends in 1 (Lowtown's `sml_door_*`, which have only a
+  Space spot) and exits whose segments carry id 0 that no actor claims by number (Salikawood's Path of Hours). The
+  reader finds them from the other side: the map the exit leads to has an exit back here, to entrance e, and this
+  exit is the free segment (or, for a door, the Space spot) nearest entrance e.
+- **Where NPCs stand**: the generic NPCs (`NPC01`...) share one routine and take their spot from the script's float
+  constants (header 0x24: u32 count, then f32 values) as x, z, facing, chosen by the NPC's number. `mapdata npcs <map>`
+  lists them. In memory, the field's actors are an array of 0x130-byte entries with the position at a fixed offset
+  (`memtool actors`, `memtool talk <x> <z>`).
+
 `tools/MapReader` (`ScriptInfo`) reads all of this. Against the game's own link table
-(`prefetchdata/ff12mapjump_custom_nocrystal.csv`, 1776 map-to-map links), it finds 724. The rest are mostly airship
-flights (aerodrome menus), shop interiors, puzzle doors and other story versions of a map.
+(`prefetchdata/ff12mapjump_custom_nocrystal.csv`, 1776 map-to-map links), it finds 1282 (2026-11-18). The rest are
+mostly airship flights (aerodrome menus), shop interiors, puzzle doors and other story versions of a map.
 
 Scripts also hold a `FF12POS3` table (positions with sizes, such as spawn areas) and `FF12AR03` (not decoded).
 

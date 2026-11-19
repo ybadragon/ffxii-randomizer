@@ -14,6 +14,7 @@ using Ff12MapData;
 //   dotnet run mapdata.cs -- reach <map>... | all         exits the walk mesh says can't be walked to, per entrance
 //   dotnet run mapdata.cs -- packages <map>              the area's map packages: entrances on their floor, floor pieces
 //   dotnet run mapdata.cs -- skips [min]                 scenes that move the story forward from any earlier point
+//   dotnet run mapdata.cs -- npcs <map>                  where the generic NPCs stand (from the script's float constants)
 if (args.Length == 0) { Console.WriteLine("map <map> | route <from> <to> | explain <map> <x> <z> | scan | draw <map> <png> [variant] | actor <map> <actor>"); return 1; }
 int Id(string s) => GameFiles.MapId(s) ?? Convert.ToInt32(s, 16);
 string Label(int id) => $"{GameFiles.PlaceName(id)} ({GameFiles.ScriptName(id)}, 0x{id:X})";
@@ -50,6 +51,29 @@ switch (args[0])
             var path = new List<int>(); for (int c = to; c != from; c = prev[c].map) path.Add(c); path.Reverse();
             Console.WriteLine($"{Label(from)} -> {Label(to)}: {path.Count} map changes");
             foreach (var c in path) Console.WriteLine($"  on {GameFiles.PlaceName(prev[c].map)}: exit at ({prev[c].exit.Mid.X:F1}, {prev[c].exit.Mid.Z:F1}) -> {GameFiles.PlaceName(c)} entrance {prev[c].entrance}");
+            return 0;
+        }
+    case "npcs":
+        {
+            // npcs <map>: where the map's people stand, from the script itself. Generic NPCs share one routine that takes
+            // its spot from the script's float constants (header 0x24: u32 count, f32 values) as x, z, facing, picked by
+            // the NPC's number (Rabanastre Aerodrome: (32.07, 108.88, -0.60) is the Bhujerban by the map counter, seen in
+            // game). Listed: runs of three constants whose (x, z) is on the walk mesh and whose third is an angle.
+            var m = MapInfo.For(Id(args[1])) ?? throw new Exception("no script for that map");
+            var b = GameFiles.Get($"ps2data/plan_master/us/plan_map/{m.Script[..5]}/{m.Script}/global/{m.Script}.ebp")!;
+            int I(int o) => BitConverter.ToInt32(b, o);
+            int s0 = I(0x10), ft = s0 + I(s0 + 0x24), fc = I(ft);
+            float F(int k) => BitConverter.ToSingle(b, ft + 4 + k * 4);
+            var mesh = m.Package?.Mesh;
+            for (int k = 0; k + 2 < fc; k++)
+            {
+                float x = F(k), z = F(k + 1), d = F(k + 2);
+                if (Math.Abs(d) > 3.15 || Math.Abs(x) < 1 || Math.Abs(z) < 1) continue;
+                if (mesh is not null && mesh.TriangleAt(new(x, z), 0.5) < 0) continue;
+                if (mesh is null && (x < 0 || z < 0)) continue;
+                Console.WriteLine($"  constant {k}: ({x:F2}, {z:F2}) facing {d:F2}");
+                k += 2;
+            }
             return 0;
         }
     case "skips":

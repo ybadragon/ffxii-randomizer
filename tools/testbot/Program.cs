@@ -636,7 +636,18 @@ switch (args[0])
                 // read the next map (package match, minimap pictures) while walking this one, so the change doesn't wait on it
                 var prefetch = Task.Run(() => { if (Ff12MapData.MapInfo.For(nextMap)?.Package is { } np) for (int v = 0; v < np.VariantCount; v++) np.Minimap(v); });
                 lastExit = (mapId, ex.TriggerId); lastLeads = ex.Leads;
-                var res = Walk(ex.Mid.X - dx * (ex.Interact ? 1.2 : 2.5), ex.Mid.Z - dz * (ex.Interact ? 1.2 : 2.5));
+                double wx = ex.Mid.X - dx * (ex.Interact ? 1.2 : 2.5), wz = ex.Mid.Z - dz * (ex.Interact ? 1.2 : 2.5);
+                var res = Walk(wx, wz);
+                if (!res.StartsWith("arrived") && MapNow() == mapId)
+                {
+                    // the minimap picture can hide cliffs (Limatra Hills: stuck at the same spot every time); the walk mesh
+                    // knows them, so try the way over the mesh before giving up on this exit
+                    Console.WriteLine($"    {res.Trim()}; trying the way over the walk mesh");
+                    using var mn = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, string.Format(System.Globalization.CultureInfo.InvariantCulture, "meshnav {0} {1}", wx, wz)) { UseShellExecute = false, RedirectStandardOutput = true })!;
+                    string? last = null; while (mn.StandardOutput.ReadLine() is string line) { Console.WriteLine("      " + line); last = line; }
+                    mn.WaitForExit();
+                    if (last is not null && last.StartsWith("meshnav ended")) res = "arrived over the walk mesh";
+                }
                 var push = System.Diagnostics.Stopwatch.StartNew();
                 if (ex.Interact)
                 {
@@ -845,6 +856,59 @@ switch (args[0])
             var cm = Read(exe + 0x1E5E528, 0x24); float cc = BitConverter.ToSingle(cm, 0), ss = BitConverter.ToSingle(cm, 0x20);
             var o = Pos0();
             Console.WriteLine($"map {BitConverter.ToUInt16(Read(exe + 0x20441F0, 2))} story {BitConverter.ToUInt16(Read(exe + 0x2044480, 2))} pos {x:F2} {y:F2} {z:F2} W->({ss:F2},{cc:F2}) D->({-cc:F2},{ss:F2}) old {o.x:F2} {o.y:F2} {o.z:F2}");
+            break;
+        }
+    case "meshnav":
+        {
+            // meshnav <x> <z>: walks to (x, z) along the map's walk mesh instead of the minimap picture: A* over the
+            // triangles, crossing only edges that aren't walls (kind 0x08), through the middle of each edge crossed, each
+            // leg walked straight with WalkTo. For maps whose minimap hides cliffs (Limatra Hills).
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            double gx = double.Parse(args[1], ci), gz = double.Parse(args[2], ci);
+            int map = BitConverter.ToUInt16(Read(exe + 0x20441F0, 2));
+            if (Ff12MapData.MapInfo.For(map)?.Package?.Mesh is not { } mesh) { Console.WriteLine("no walk mesh for this map"); return 1; }
+            var (sx, _, sz) = Pos();
+            int a = mesh.NearestTriangle(new(sx, sz), 4), b = mesh.NearestTriangle(new(gx, gz), 4);
+            if (a < 0 || b < 0) { Console.WriteLine("start or goal is off the walk mesh"); return 1; }
+            var T = mesh.Triangles; var V = mesh.Vertices;
+            var walls = mesh.Edges.Where(e => e.Kind == 0x08).Select(e => (Math.Min(e.A, e.B), Math.Max(e.A, e.B))).ToHashSet();
+            var byEdge = new Dictionary<(int, int), List<int>>();
+            for (int t = 0; t < T.Length; t++)
+            {
+                var (c0, c1, c2, _) = T[t]; if (c0 >= V.Length || c1 >= V.Length || c2 >= V.Length) continue;
+                foreach (var (u, v) in new[] { (c0, c1), (c1, c2), (c2, c0) }) { var k = (Math.Min(u, v), Math.Max(u, v)); if (!byEdge.TryGetValue(k, out var l)) byEdge[k] = l = []; l.Add(t); }
+            }
+            Ff12MapData.Point2 Mid((int, int) e) => new((V[e.Item1].X + V[e.Item2].X) / 2, (V[e.Item1].Z + V[e.Item2].Z) / 2);
+            var cost = new Dictionary<int, double> { [a] = 0 }; var via = new Dictionary<int, (int from, (int, int) edge)>();
+            var pts = new Dictionary<int, Ff12MapData.Point2> { [a] = new(sx, sz) };
+            var pq = new PriorityQueue<int, double>(); pq.Enqueue(a, 0);
+            while (pq.TryDequeue(out int t, out _) && t != b)
+            {
+                var (c0, c1, c2, _) = T[t];
+                foreach (var (u, v) in new[] { (c0, c1), (c1, c2), (c2, c0) })
+                {
+                    var k = (Math.Min(u, v), Math.Max(u, v)); if (walls.Contains(k)) continue;
+                    foreach (int n in byEdge[k]) if (n != t)
+                    {
+                        var m = Mid(k); double c = cost[t] + Math.Sqrt(Math.Pow(m.X - pts[t].X, 2) + Math.Pow(m.Z - pts[t].Z, 2));
+                        if (cost.TryGetValue(n, out double old) && old <= c) continue;
+                        cost[n] = c; via[n] = (t, k); pts[n] = m; pq.Enqueue(n, c);
+                    }
+                }
+            }
+            if (!cost.ContainsKey(b)) { Console.WriteLine("no way over the walk mesh"); return 1; }
+            var path = new List<Ff12MapData.Point2> { new(gx, gz) };
+            for (int t = b; t != a; t = via[t].from) path.Insert(0, pts[t]);
+            Console.WriteLine($"mesh path: {path.Count} points");
+            Input.Focus(p.MainWindowHandle);
+            foreach (var w in path)
+            {
+                var r = WalkTo(w.X, w.Z, 1.0, 15, true);
+                if (r.StartsWith("map changed")) { Console.WriteLine(r); break; }
+                if (r.StartsWith("timeout")) { Console.WriteLine($"stopped short of ({w.X:F1}, {w.Z:F1}): {r.Trim()}"); return 1; }
+            }
+            Input.ReleaseAll();
+            var (ex, _, ez) = Pos(); Console.WriteLine($"meshnav ended at ({ex:F1}, {ez:F1})");
             break;
         }
     case "goto":

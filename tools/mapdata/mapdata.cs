@@ -181,6 +181,22 @@ switch (args[0])
             }
             return 0;
         }
+    case "jumps":
+        {
+            // jumps <map>: every mapjump in the map's script, by actor, with its three arguments (map, entrance, mode):
+            // also the ones the exit reader leaves out (airship counters, scenes), which run from talking or a story step
+            var name = GameFiles.ScriptName(Id(args[1]))!;
+            var bytes = GameFiles.Get($"ps2data/plan_master/us/plan_map/{name[..5]}/{name}/global/{name}.ebp") ?? throw new Exception("no script");
+            var s = new Ff12Randomizer.Core.GameData.MapScript(bytes);
+            foreach (var a in s.Actors)
+            {
+                var ins = s.Instructions(a).ToList();
+                for (int i = 3; i < ins.Count; i++)
+                    if (ins[i].Op is 0x5D && ins[i].Operand == 0x8D && ins[i - 1].Op == 0x4F && ins[i - 2].Op == 0x4F && ins[i - 3].Op == 0x4F)
+                        Console.WriteLine($"  {a.Name}: {Label(ins[i - 3].Operand)} entrance {ins[i - 2].Operand}, mode {ins[i - 1].Operand}");
+            }
+            return 0;
+        }
     case "crystals":
         {
             // crystals: every teleport destination: its number in the teleport list, map, and where you land (by the crystal)

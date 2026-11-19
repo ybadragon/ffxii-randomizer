@@ -49,7 +49,7 @@ public sealed class ScriptInfo
     public IReadOnlyList<Exit> Exits { get; private set; }
     /// <summary>Every map and entrance any of this map's mapjumps leads to, doors without a line included.</summary>
     public IReadOnlyList<(int Map, int Entrance)> AllLeads { get; }
-    readonly List<(int Id, string Actor, List<(int, int)> Leads)> pendingDoors = [];
+    readonly List<(int Id, string Actor, List<(int, int)> Leads, bool Door)> pendingDoors = [];
     /// <summary>Trigger lines no mapjump uses (scene and message triggers, guards that turn you back).</summary>
     public IReadOnlyList<(int TriggerId, string? Actor, Segment Line)> OtherTriggers { get; }
     /// <summary>The script's FF12POS3 table: named spots (index, position, size).</summary>
@@ -72,24 +72,35 @@ public sealed class ScriptInfo
         GameFiles.Get($"ps2data/plan_master/us/plan_map/{scriptName[..5]}/{scriptName}/global/{scriptName}.ebp") is { Length: > 0x80 } b ? new ScriptInfo(b) : null;
 
     /// <summary>
-    /// A door with no trigger line gets the Space spot in front of the entrance its other side leads back to: the map it
-    /// opens to has a door (or exit) leading here to entrance e, and this door's spot is the interaction spot nearest
-    /// entrance e (within 6 units). Checked in Lowtown (North Sprawl to North End and East End).
+    /// An exit with no trigger line of its own gets one from the other side: the map it leads to has an exit leading here
+    /// to entrance e, so this exit is by entrance e. A door (Space) takes the interaction spot nearest e (within 6 units;
+    /// Lowtown, North Sprawl to North End and East End); any other exit takes the nearest trigger segment no actor
+    /// claims (within 10 units; Salikawood's Path of Hours, frs_a06, whose segments carry id 0).
     /// </summary>
     void ResolveDoors(int me)
     {
         var added = new List<Exit>();
-        foreach (var (id, actor, leads) in pendingDoors)
+        var free = OtherTriggers.Select(t => t.Line).ToList();
+        foreach (var (id, actor, leads, door) in pendingDoors)
         {
             int back = -1;
             foreach (var (m2, _) in leads)
                 if (GameFiles.ScriptName(m2) is { } n2 && Read(n2) is { } other && other.AllLeads.FirstOrDefault(l => l.Map == me) is { Map: > 0 } l)
                 { back = l.Entrance; break; }
-            if (back < 0 || back >= Entrances.Count || InteractSpots.Count == 0) continue;
-            var (ex, _, ez, _) = Entrances[back];
-            var spot = InteractSpots.OrderBy(s => (s.X - ex) * (s.X - ex) + (s.Z - ez) * (s.Z - ez)).First();
-            if ((spot.X - ex) * (spot.X - ex) + (spot.Z - ez) * (spot.Z - ez) > 36) continue;
-            added.Add(new Exit(id, actor, [new Segment(new(spot.X - 0.5, spot.Z), new(spot.X + 0.5, spot.Z))], leads, true));
+            if (back < 0 || back >= Entrances.Count) continue;
+            var at = new Point2(Entrances[back].X, Entrances[back].Z);
+            if (door)
+            {
+                if (InteractSpots.Count == 0) continue;
+                var spot = InteractSpots.OrderBy(s => (s.X - at.X) * (s.X - at.X) + (s.Z - at.Z) * (s.Z - at.Z)).First();
+                if ((spot.X - at.X) * (spot.X - at.X) + (spot.Z - at.Z) * (spot.Z - at.Z) > 36) continue;
+                added.Add(new Exit(id, actor, [new Segment(new(spot.X - 0.5, spot.Z), new(spot.X + 0.5, spot.Z))], leads, true));
+            }
+            else if (free.Count > 0 && free.OrderBy(s => s.DistanceTo(at)).First() is var seg && seg.DistanceTo(at) < 10)
+            {
+                free.Remove(seg);
+                added.Add(new Exit(id, actor, [seg], leads));
+            }
         }
         if (added.Count > 0) Exits = [.. Exits, .. added];
     }
@@ -175,8 +186,8 @@ public sealed class ScriptInfo
         if (lonelyLines.Count == 1 && lonelyExits.Count == 1) { lines[lonelyExits[0]] = lines[lonelyLines[0]]; lines.Remove(lonelyLines[0]); }
         // a door with no trigger line (Lowtown's, "PUSHII k; fieldsign" then a mapjump whose last argument is 1): which
         // Space spot is its own is found from the other side (ResolveDoors, called by For)
-        foreach (int id in leads.Keys.Where(id => interact.Contains(id) && !lines.ContainsKey(id)))
-            pendingDoors.Add((id, owner[id], leads[id]));
+        foreach (int id in leads.Keys.Where(id => !lines.ContainsKey(id)))
+            pendingDoors.Add((id, owner[id], leads[id], interact.Contains(id)));
         AllLeads = leads.Values.SelectMany(l => l).ToList();
         Exits = lines.Where(kv => leads.ContainsKey(kv.Key)).Select(kv => new Exit(kv.Key, owner[kv.Key], kv.Value, leads[kv.Key], interact.Contains(kv.Key))).ToList();
         OtherTriggers = lines.Where(kv => !leads.ContainsKey(kv.Key)).SelectMany(kv => kv.Value.Select(s => (kv.Key, owner.GetValueOrDefault(kv.Key), s))).ToList();

@@ -28,6 +28,8 @@ while read -r item map place; do
     echo "LEG $item 0x$map $place: FAILED ($out)" | tee -a $LOG; continue
   fi
   t=$($M teleport touch 2>&1 | tee /dev/stderr | tail -1)
+  # a crystal can ignore Space for a while after arriving (seen at Walk of Mind and The Western Divide): try once more
+  touched | grep -qx "$item" || { sleep 15; t=$($M teleport touch 2>&1 | tee /dev/stderr | tail -1); }
   if touched | grep -qx "$item"; then echo "LEG $item 0x$map $place: OK" | tee -a $LOG
   else echo "LEG $item 0x$map $place: REACHED, TOUCH FAILED ($t)" | tee -a $LOG; fi
 done <<< "$crystals"

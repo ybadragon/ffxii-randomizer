@@ -34,6 +34,7 @@ switch (args[0])
                 Console.WriteLine($"  variant {c.ToVariant} {(c.Opens ? "adds" : "removes")} floor at ({c.Min.X:F0}, {c.Min.Z:F0})-({c.Max.X:F0}, {c.Max.Z:F0}): {m.Switches(c.ToVariant)}");
             foreach (var s in m.Info.VariantSwitches.Where(s => !m.VariantChanges.Any(c => s.Variants.Contains(c.ToVariant))))
                 Console.WriteLine($"  {s.Actor} switches to variant(s) {string.Join(" ", s.Variants)} (no floor change found)");
+            foreach (var sp in m.Info.InteractSpots) Console.WriteLine($"  Space spot: ({sp.Item1:F1}, {sp.Item3:F1}) [{sp.Item2:F1} {sp.Item4:F1} {sp.Item5:F1}]");
             return 0;
         }
     case "route":
@@ -179,6 +180,15 @@ switch (args[0])
                     : x.Op is 0x48 or 0x49 && x.Operand == s.StoryFlag ? "STORYFLAG" : $"{(short)x.Operand}";
                 Console.WriteLine($"  {x.At:X5} {op} {arg}");
             }
+            return 0;
+        }
+    case "actors":
+        {
+            // actors <map>: the script's actors (named code blocks) with their sizes and the calls they make most
+            var name = GameFiles.ScriptName(Id(args[1]))!;
+            var bytes = GameFiles.Get($"ps2data/plan_master/us/plan_map/{name[..5]}/{name}/global/{name}.ebp") ?? throw new Exception("no script");
+            var s = new Ff12Randomizer.Core.GameData.MapScript(bytes);
+            foreach (var a in s.Actors) Console.WriteLine($"  {a.Name} @{a.Start:X5} {a.End - a.Start} bytes");
             return 0;
         }
     case "jumps":

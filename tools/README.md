@@ -33,6 +33,9 @@ Nothing is copied into the repo as tables. The formats are described in the code
   (yellow).
 - `actor <map> <actor>`: one actor's script code. Call names come from ff12-script when it is checked out in
   `work/ff12-script`.
+- `actors <map>`: the script's actors (named code blocks) and their sizes.
+- `jumps <map>`: every mapjump in the script by actor, with its map, entrance and mode, including those the exit
+  reader skips (airship counters, scenes, crystals).
 - `scan`: every map with barriers or variant changes. Slow the first time, since it reads every map.
 
 ## testbot: walk the game by itself

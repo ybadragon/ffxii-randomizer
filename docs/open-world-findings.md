@@ -22,6 +22,7 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Saving and loading | Saving at South Bank Village's crystal (to slot 006, the bot's own slot; slots 001-005 are left alone); the autosave in Banks of the Sogoht loads at story 420 with the level-99 party | 2026-11-18 |
 | Lowtown (Rabanastre) | In from the Southgate plaza door to South Sprawl, through to North Sprawl, and out by Lowtown's door to East End then North End (gate-list rows rbn_a18, slm_a02, rbn_a03) | 2026-11-18 |
 | Mosphoran Highwaste, Babbling Vale | Walked in from Nalbina (West Barbican, Southern Skirts, Summit Path, Empyrean Way). The Shrine of the Northwest Wind works at story 420: "The surrounding floatweed is lofted into the air by the steam" (gate-list rows mnt_d01, normally story 3070) | 2026-11-19 |
+| Airships: Rabanastre to Nalbina | The "Flights to Nalbina" clerk in Rabanastre's aerodrome (behind the counter at (30.1, 97.6), talked to from (30.7, 99.4)) sells passage at story 420: 200 gil, leisure craft or private cabin. The private cabin flew straight to Nalbina's aerodrome; story stayed 420 | 2026-11-19 |
 | Feywood, Phon Coast, Tchita Uplands, Balfonheim Port, Necrohol of Nabudis | Balfonheim Port (Sea Breeze Lane crystal) reached over land through Rava's Pass and the Tchita Uplands. The crystal sweep walked (with Lente's Tear, avoiding Freezing Gorge) through Golmore into the Feywood (Quietened Trace), on to the Phon Coast (Limatra Hills), and to the Necrohol of Nabudis' Walk of Mind; also The Western Divide. Story stayed 420 | 2026-11-18 |
 
 ## Story skip
@@ -53,7 +54,7 @@ Key items that also wait for the story (an actor checks the item *and* `story >=
 
 ## Not tested: the bot can't route there yet
 
-Most failed legs of the crystal sweep were the bot's own limits, not the game: airship flights (Rabanastre's aerodrome is reached and its Docent talks at story 420: "each counter serves a different destination"; the bot didn't find a ticket counter yet. The counter talk `乗船カウンタートーク` mapjumps to Bhujerba, Nalbina, Archades and Balfonheim), Barheim
+Most failed legs of the crystal sweep were the bot's own limits, not the game: airship flights (they work: see Works. The planner doesn't know them, because the counter talk `乗船カウンタートーク` runs from a clerk, not a trigger line; `mapdata jumps <map>` lists its mapjumps: Rabanastre flies to Bhujerba, Nalbina, Archades and the Sky Saloon; Nalbina to Rabanastre, Archades and Balfonheim; Bhujerba to Rabanastre and Balfonheim), Barheim
 Passage's inner links, Ridorana, Archades, the Feywood (from Golmore through gol_c01 and gol_d01). The exit reader finds 1185 of the game's 1776 map links
 (`prefetchdata/ff12mapjump_custom_nocrystal.csv`).
 

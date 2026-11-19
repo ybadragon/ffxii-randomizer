@@ -46,7 +46,10 @@ public sealed class ScriptInfo
     const byte PushII = 0x4F, CallPopA = 0x5D, Call = 0x58;
 
     public IReadOnlyList<(double X, double Y, double Z, double Facing)> Entrances { get; }
-    public IReadOnlyList<Exit> Exits { get; }
+    public IReadOnlyList<Exit> Exits { get; private set; }
+    /// <summary>Every map and entrance any of this map's mapjumps leads to, doors without a line included.</summary>
+    public IReadOnlyList<(int Map, int Entrance)> AllLeads { get; }
+    readonly List<(int Id, string Actor, List<(int, int)> Leads)> pendingDoors = [];
     /// <summary>Trigger lines no mapjump uses (scene and message triggers, guards that turn you back).</summary>
     public IReadOnlyList<(int TriggerId, string? Actor, Segment Line)> OtherTriggers { get; }
     /// <summary>The script's FF12POS3 table: named spots (index, position, size).</summary>
@@ -59,8 +62,37 @@ public sealed class ScriptInfo
     /// </summary>
     public IReadOnlyList<(double X, double Y, double Z, double Width, double Depth)> InteractSpots { get; }
 
-    public static ScriptInfo? For(string scriptName) => scriptName.Length < 5 ? null :
+    public static ScriptInfo? For(string scriptName)
+    {
+        if (Read(scriptName) is not { } si) return null;
+        if (GameFiles.MapId(scriptName) is int me) si.ResolveDoors(me);
+        return si;
+    }
+    static ScriptInfo? Read(string scriptName) => scriptName.Length < 5 ? null :
         GameFiles.Get($"ps2data/plan_master/us/plan_map/{scriptName[..5]}/{scriptName}/global/{scriptName}.ebp") is { Length: > 0x80 } b ? new ScriptInfo(b) : null;
+
+    /// <summary>
+    /// A door with no trigger line gets the Space spot in front of the entrance its other side leads back to: the map it
+    /// opens to has a door (or exit) leading here to entrance e, and this door's spot is the interaction spot nearest
+    /// entrance e (within 6 units). Checked in Lowtown (North Sprawl to North End and East End).
+    /// </summary>
+    void ResolveDoors(int me)
+    {
+        var added = new List<Exit>();
+        foreach (var (id, actor, leads) in pendingDoors)
+        {
+            int back = -1;
+            foreach (var (m2, _) in leads)
+                if (GameFiles.ScriptName(m2) is { } n2 && Read(n2) is { } other && other.AllLeads.FirstOrDefault(l => l.Map == me) is { Map: > 0 } l)
+                { back = l.Entrance; break; }
+            if (back < 0 || back >= Entrances.Count || InteractSpots.Count == 0) continue;
+            var (ex, _, ez, _) = Entrances[back];
+            var spot = InteractSpots.OrderBy(s => (s.X - ex) * (s.X - ex) + (s.Z - ez) * (s.Z - ez)).First();
+            if ((spot.X - ex) * (spot.X - ex) + (spot.Z - ez) * (spot.Z - ez) > 36) continue;
+            added.Add(new Exit(id, actor, [new Segment(new(spot.X - 0.5, spot.Z), new(spot.X + 0.5, spot.Z))], leads, true));
+        }
+        if (added.Count > 0) Exits = [.. Exits, .. added];
+    }
 
     public ScriptInfo(byte[] b)
     {
@@ -141,14 +173,11 @@ public sealed class ScriptInfo
         var lonelyLines = lines.Keys.Where(id => !leads.ContainsKey(id)).ToList();
         var lonelyExits = leads.Keys.Where(id => !lines.ContainsKey(id)).ToList();
         if (lonelyLines.Count == 1 && lonelyExits.Count == 1) { lines[lonelyExits[0]] = lines[lonelyLines[0]]; lines.Remove(lonelyLines[0]); }
-        // a door with no trigger line (Lowtown's, "PUSHII k; fieldsign" then a mapjump whose last argument is 1): its Space
-        // spot is interaction spot k, so a short line across that spot stands for it
-        foreach (int id in leads.Keys.Where(id => interact.Contains(id) && !lines.ContainsKey(id)).ToList())
-            if (id - FieldSignLines is int k && k >= 0 && k < spots.Count)
-            {
-                var (sx, _, sz, _, _) = spots[k];
-                lines[id] = [new Segment(new(sx - 0.5, sz), new(sx + 0.5, sz))];
-            }
+        // a door with no trigger line (Lowtown's, "PUSHII k; fieldsign" then a mapjump whose last argument is 1): which
+        // Space spot is its own is found from the other side (ResolveDoors, called by For)
+        foreach (int id in leads.Keys.Where(id => interact.Contains(id) && !lines.ContainsKey(id)))
+            pendingDoors.Add((id, owner[id], leads[id]));
+        AllLeads = leads.Values.SelectMany(l => l).ToList();
         Exits = lines.Where(kv => leads.ContainsKey(kv.Key)).Select(kv => new Exit(kv.Key, owner[kv.Key], kv.Value, leads[kv.Key], interact.Contains(kv.Key))).ToList();
         OtherTriggers = lines.Where(kv => !leads.ContainsKey(kv.Key)).SelectMany(kv => kv.Value.Select(s => (kv.Key, owner.GetValueOrDefault(kv.Key), s))).ToList();
 

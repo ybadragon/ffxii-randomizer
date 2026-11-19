@@ -1115,14 +1115,24 @@ switch (args[0])
                 // re-read: people walk about
                 var now = Read(target.a, 12); float tx = BitConverter.ToSingle(now, 0), tz = BitConverter.ToSingle(now, 8);
                 var (qx, _, qz) = Pos(); double d = D(tx, tz, qx, qz);
-                if (d > 1.0)
+                if (d > 0.9)
                 {
-                    // stop 0.8 short on the line from here, then take a short step at it so the leader faces it
+                    // stop 0.6 short on the line from here (Space reached a person from 1.0, not from 1.3), then take a short step at it so the leader faces it
                     double ux = (tx - qx) / d, uz = (tz - qz) / d;
-                    Console.WriteLine("  " + WalkTo(tx - ux * 0.8, tz - uz * 0.8, 0.3, 10, true).Trim());
+                    Console.WriteLine("  " + WalkTo(tx - ux * 0.6, tz - uz * 0.6, 0.25, 10, true).Trim());
                 }
                 Input.ReleaseAll(); Thread.Sleep(150);
-                Steer(tx, tz, 120); Input.ReleaseAll(); Thread.Sleep(250);
+                // face it: tap the movement keys that point at it (the camera's forward is W, its right is D; a short
+                // tap turns the leader without walking far)
+                {
+                    var cm = Read(exe + 0x1E5E528, 0x24); float cc = BitConverter.ToSingle(cm, 0), ss = BitConverter.ToSingle(cm, 0x20);
+                    var (fx, _, fz) = Pos(); double dx = tx - fx, dz = tz - fz, dl = Math.Max(0.01, Math.Sqrt(dx * dx + dz * dz));
+                    double fw = (dx * ss + dz * cc) / dl, rt = (dx * -cc + dz * ss) / dl;
+                    var keys = new List<char>();
+                    if (fw > 0.38) keys.Add('W'); else if (fw < -0.38) keys.Add('S');
+                    if (rt > 0.38) keys.Add('D'); else if (rt < -0.38) keys.Add('A');
+                    Input.Hold([.. keys], 90); Input.ReleaseAll(); Thread.Sleep(300);
+                }
                 Input.Hold([' '], 120); Thread.Sleep(900);
                 Console.WriteLine($"  pressed Space facing ({tx:F2}, {tz:F2}) from {D(tx, tz, Pos().x, Pos().z):F2} away");
                 if (args.Length > 3 && args[3] == "once") break;

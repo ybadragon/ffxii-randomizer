@@ -21,6 +21,7 @@ mode and the flee key on (see [testing in game](testing-in-game.md)). Dates are 
 | Shops | Gurdy's chocobo hire (30 gil, paid) and the Cartographers' Guild moogle (Ozmone Plain map 1700, Jahara 30) in Banks of the Sogoht | 2026-11-18 |
 | Saving and loading | Saving at South Bank Village's crystal (to slot 006, the bot's own slot; slots 001-005 are left alone); the autosave in Banks of the Sogoht loads at story 420 with the level-99 party | 2026-11-18 |
 | Lowtown (Rabanastre) | In from the Southgate plaza door to South Sprawl, through to North Sprawl, and out by Lowtown's door to East End then North End (gate-list rows rbn_a18, slm_a02, rbn_a03) | 2026-11-18 |
+| Mosphoran Highwaste, Babbling Vale | Walked in from Nalbina (West Barbican, Southern Skirts, Summit Path, Empyrean Way). The Shrine of the Northwest Wind works at story 420: "The surrounding floatweed is lofted into the air by the steam" (gate-list rows mnt_d01, normally story 3070) | 2026-11-19 |
 | Feywood, Phon Coast, Tchita Uplands, Balfonheim Port, Necrohol of Nabudis | Balfonheim Port (Sea Breeze Lane crystal) reached over land through Rava's Pass and the Tchita Uplands. The crystal sweep walked (with Lente's Tear, avoiding Freezing Gorge) through Golmore into the Feywood (Quietened Trace), on to the Phon Coast (Limatra Hills), and to the Necrohol of Nabudis' Walk of Mind; also The Western Divide. Story stayed 420 | 2026-11-18 |
 
 ## Story skip

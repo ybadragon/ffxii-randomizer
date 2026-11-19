@@ -60,6 +60,14 @@ Passage's inner links, Ridorana, Archades, the Feywood (from Golmore through gol
 
 ## Leads
 
+- **Airship routes wait for the story** (a gap, not a bug): only the Nalbina clerk stands in Rabanastre's aerodrome at
+  story 420. A traveller there says "If a given counter is empty, that route is not currently in service". The
+  aerodrome's generic NPC code (`NPC01` in rbn_b01) places four clerks, each only when story >= its value: (30.13,
+  97.63) from 350 (Nalbina, seen), (33.76, 110.36) from 670, (30.13, 110.19) from 4000, (33.86, 97.60) from 5150 (spots
+  from `mapdata floats 314`). `opengates.csv` has no aerodrome rows, so Bhujerba (and the Lhusu Mines behind it), which
+  has no land route, can't be reached at 420. Opening these checks would be a design choice: Bhujerba's arrival and the
+  aerodrome's event watcher (`発着イベント監視`) have story scenes of their own, to check before.
+
 - `ps2data/image/ff12/us/bin/mapjumpgroupflagrom.bin` (FLAGROM1): 152 groups of story ranges (u16 lo, u16 hi | 0x8000;
   `..hi` from 0; FFFF ends). Exit groups switch on by story range here, outside the map scripts the open-world patch
   edits. How script flag ids (`setmapjumpgroupflag` 0x430 and up to 16426) map to these groups isn't decoded.

@@ -182,6 +182,17 @@ switch (args[0])
             }
             return 0;
         }
+    case "floats":
+        {
+            // floats <map> [from] [count]: the script's float constants (header 0x24), as op50 k pushes them
+            var m = MapInfo.For(Id(args[1])) ?? throw new Exception("no script for that map");
+            var b = GameFiles.Get($"ps2data/plan_master/us/plan_map/{GameFiles.ScriptName(m.Id)![..5]}/{GameFiles.ScriptName(m.Id)}/global/{GameFiles.ScriptName(m.Id)}.ebp")!;
+            int I(int o) => BitConverter.ToInt32(b, o);
+            int s0 = I(0x10), ft = s0 + I(s0 + 0x24), fc = I(ft);
+            int from = args.Length > 2 ? int.Parse(args[2]) : 0, count = args.Length > 3 ? int.Parse(args[3]) : fc;
+            for (int k = from; k < Math.Min(fc, from + count); k++) Console.WriteLine($"  {k}: {BitConverter.ToSingle(b, ft + 4 + k * 4):F2}");
+            return 0;
+        }
     case "actors":
         {
             // actors <map>: the script's actors (named code blocks) with their sizes and the calls they make most
